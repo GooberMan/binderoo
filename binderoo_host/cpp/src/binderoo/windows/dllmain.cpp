@@ -27,11 +27,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 //----------------------------------------------------------------------------
 
-#include <Windows.h>
+#include "binderoo/defs.h"
 //----------------------------------------------------------------------------
 
+#if BIND_OS == BIND_OS_WINDOWS
 #include "binderoo/exports.h"
 #include "binderoo/hash.h"
+//----------------------------------------------------------------------------
 
 BOOL WINAPI DllMain( HINSTANCE hinstDLL, DWORD dwReason, LPVOID pReserved )
 {
@@ -45,5 +47,6 @@ BOOL WINAPI DllMain( HINSTANCE hinstDLL, DWORD dwReason, LPVOID pReserved )
 	}
 }
 //----------------------------------------------------------------------------
+#endif // Windows check
 
 //============================================================================

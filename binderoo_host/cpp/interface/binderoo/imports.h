@@ -77,7 +77,7 @@ namespace binderoo
 	class ImportedClassInstance : public ImportedBase
 	{
 	public:
-		typedef typename _ty ThisType;
+		typedef _ty ThisType;
 		typedef TypeNames< ThisType > NameProvider;
 
 		BIND_INLINE ImportedClassInstance( const char* pClassName = NameProvider::getDName(), bool bInstantiate = false )
@@ -93,10 +93,8 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-		BIND_INLINE ImportedClassInstance( ImportedClassInstance& otherInst )
-		{
-			static_assert( false, "ImportedClassInstance currently does not allow you to duplicate another instance. But that will be coming soon..." );
-		}
+		// ImportedClassInstance currently does not allow you to duplicate another instance. But that will be coming soon...
+		ImportedClassInstance( ImportedClassInstance& otherInst ) = delete;
 		//--------------------------------------------------------------------
 
 		BIND_INLINE ImportedClassInstance( ImportedClassInstance&& otherInst )
@@ -111,11 +109,8 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-		BIND_INLINE ImportedClassInstance& operator=( ImportedClassInstance& otherInst )
-		{
-			static_assert( false, "ImportedClassInstance currently does not allow you to duplicate another instance. But that will be coming soon..." );
-			return *this;
-		}
+		// ImportedClassInstance currently does not allow you to duplicate another instance. But that will be coming soon...
+		ImportedClassInstance& operator=( ImportedClassInstance& otherInst ) = delete;
 		//--------------------------------------------------------------------
 
 		BIND_INLINE ImportedClassInstance& operator=( ImportedClassInstance&& otherInst )
@@ -177,15 +172,15 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-		friend class RefCountedImportedClassInstance< typename _ty >;
-		ptrdiff_t iRefCount;
+		friend class RefCountedImportedClassInstance< _ty >;
+		std::ptrdiff_t iRefCount;
 	};
 	//------------------------------------------------------------------------
 
 	template< typename _ty >
 	class RefCountedImportedClassInstance
 	{
-		typedef typename ImportedClassInstance< _ty >				ImportedClass;
+		typedef ImportedClassInstance< _ty >						ImportedClass;
 
 	public:
 		BIND_INLINE RefCountedImportedClassInstance()
@@ -249,7 +244,7 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		BIND_INLINE bool				isAcquired() const						{ return pRefCountedInstance != nullptr; }
-		BIND_INLINE ptrdiff_t			getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount : 0; }
+		BIND_INLINE std::ptrdiff_t		getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount : 0; }
 		BIND_INLINE _ty* const			operator->()								{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE const _ty* const	operator->() const						{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE						operator _ty* const ()					{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
@@ -310,7 +305,7 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		template< typename... Args >
-		BIND_INLINE typename ThisType::return_type operator() ( typename Args ...args )
+		BIND_INLINE typename ThisType::return_type operator() ( Args... args )
 		{
 			return getInternal()( args... );
 		}
@@ -349,7 +344,7 @@ namespace binderoo
 	};
 	//------------------------------------------------------------------------
 
-#elif BIND_CPPVERSION == BIND_MSVC2012
+#elif BIND_STANDARD == BIND_STANDARD_MSVC2012
 	template< typename _functiontraits >
 	class ImportedFunction : public ImportedBase
 	{

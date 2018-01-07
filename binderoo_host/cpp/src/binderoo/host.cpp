@@ -43,38 +43,57 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <algorithm>
 
-#include <Windows.h>
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
+	#include <Windows.h>
 
-#if WINAPI_FAMILY == WINAPI_FAMILY_DESKTOP_APP
-	// Rapid iteration functionality
-	#define BINDEROOHOST_RAPIDITERATION 1
-	// Load library from disk
-	#define BINDEROOHOST_LOADPACKAGEDLIBRARY 0
-	// Multi-byte load library
-	#define BINDEROOHOST_LOADLIBRARYA 1
-#else
-	// Static loading functionality
+	#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
+		// Rapid iteration functionality
+		#define BINDEROOHOST_RAPIDITERATION 1
+		// Load library from disk
+		#define BINDEROOHOST_LOADPACKAGEDLIBRARY 0
+		// Multi-byte load library
+		#define BINDEROOHOST_LOADLIBRARYA 1
+	#else
+		// Static loading functionality
+		#define BINDEROOHOST_RAPIDITERATION 0
+		// Load library from App Package
+		#define BINDEROOHOST_LOADPACKAGEDLIBRARY 1
+		// Wide char load library
+		#define BINDEROOHOST_LOADLIBRARYA 0
+	#endif // SYSAPI check
+
+	#define GetModuleSymbolAddress GetProcAddress
+
+	#if BINDEROOHOST_RAPIDITERATION
+		#pragma warning( push )
+		#pragma warning( disable: 4091 )
+		#include <DbgHelp.h>
+		#pragma warning( pop )
+		
+		#pragma comment( lib, "dbghelp.lib" )
+		#pragma comment( lib, "Rpcrt4.lib" )
+	#endif // BINDEROOHOST_RAPIDITERATION
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	#include <dirent.h>
+	#include <dlfcn.h>
+
+	#define GetModuleSymbolAddress dlsym
+
 	#define BINDEROOHOST_RAPIDITERATION 0
-	// Load library from App Package
-	#define BINDEROOHOST_LOADPACKAGEDLIBRARY 1
-	// Wide char load library
-	#define BINDEROOHOST_LOADLIBRARYA 0
-#endif
+#endif // SYSAPI check
 
-#if BINDEROOHOST_RAPIDITERATION
-	#pragma warning( push )
-	#pragma warning( disable: 4091 )
-	#include <DbgHelp.h>
-	#pragma warning( pop )
-	
-	#pragma comment( lib, "dbghelp.lib" )
-	#pragma comment( lib, "Rpcrt4.lib" )
-#endif // BINDEROOHOST_RAPIDITERATION
 //----------------------------------------------------------------------------
 
+template<>
 binderoo::AllocatorFunc				binderoo::AllocatorFunctions< binderoo::AllocatorSpace::Host >::fAlloc		= nullptr;
+
+template<>
 binderoo::DeallocatorFunc			binderoo::AllocatorFunctions< binderoo::AllocatorSpace::Host >::fFree		= nullptr;
+
+template<>
 binderoo::CAllocatorFunc			binderoo::AllocatorFunctions< binderoo::AllocatorSpace::Host >::fCalloc		= nullptr;
+
+template<>
 binderoo::ReallocatorFunc			binderoo::AllocatorFunctions< binderoo::AllocatorSpace::Host >::fRealloc	= nullptr;
 
 binderoo::Host*	binderoo::Host::pActiveHost																		= nullptr;
@@ -93,6 +112,15 @@ namespace binderoo
 	typedef void					( BIND_C_CALL *DestroyObjectByNamePtr )									( DString, void* pObject );
 	typedef void					( BIND_C_CALL *DestroyObjectByHashPtr )									( uint64_t, void* pObject );
 	typedef const char*				( BIND_C_CALL *GenerateBindingDeclarationsForAllObjectsPtr )			( UnalignedAllocatorFunc allocator, const char* pVersion );
+	//------------------------------------------------------------------------
+
+	#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
+		typedef HMODULE ModuleHandle;
+		constexpr ModuleHandle INVALID_MODULE = nullptr;
+	#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		typedef void* ModuleHandle;
+		constexpr ModuleHandle INVALID_MODULE = nullptr;
+	#endif
 	//------------------------------------------------------------------------
 
 	enum class DynamicLibStatus : int
@@ -141,7 +169,7 @@ namespace binderoo
 		InternalString									strScratchPath;
 		InternalString									strScratchLib;
 		InternalString									strScratchSymbols;
-		HMODULE											hModule;
+		ModuleHandle									hModule;
 		DynamicLibStatus								eStatus;
 
 		ImportFunctionsFromPtr							importFunctionsFrom;
@@ -158,7 +186,7 @@ namespace binderoo
 	template< typename _ty >
 	struct HostBinding
 	{
-		typedef typename _ty BoundType;
+		typedef _ty BoundType;
 
 		HostBinding()
 			: pLibrary( nullptr )
@@ -608,9 +636,6 @@ void binderoo::HostImplementation::collectDynamicLibraries()
 
 	for( auto& searchPath : configuration.strDynamicLibSearchFolders )
 	{
-		WIN32_FIND_DATA		foundData;
-		HANDLE				hFoundHandle = INVALID_HANDLE_VALUE;
-
 		InternalString strSearchPath( searchPath.data(), searchPath.length() );
 		std::replace( strSearchPath.begin(), strSearchPath.end(), '\\', '/' );
 
@@ -623,6 +648,10 @@ void binderoo::HostImplementation::collectDynamicLibraries()
 		{
 			strSearchPath += "/rapid/";
 		}
+
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
+		WIN32_FIND_DATA		foundData;
+		HANDLE				hFoundHandle = INVALID_HANDLE_VALUE;
 
 		InternalString strSearchPattern = strSearchPath;
 		strSearchPattern += "*.dll";
@@ -643,6 +672,29 @@ void binderoo::HostImplementation::collectDynamicLibraries()
 		}
 
 		FindClose( hFoundHandle );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		DIR* pCurrDir = opendir( strSearchPath.c_str() );
+
+		if( pCurrDir )
+		{
+			InternalString strExtension( ".so" );
+
+			struct dirent* pCurrEntry = nullptr;
+
+			while( ( pCurrEntry = readdir( pCurrDir ) ) != nullptr )
+			{
+				InternalString strFilename = InternalString( pCurrEntry->d_name );
+
+				if( std::equal( strFilename.rbegin(), strFilename.rend(), strExtension.rbegin() ) )
+				{
+					InternalString strFullFilename = strSearchPath + strFilename;
+					vecFoundFiles.push_back( strFullFilename );
+				}
+			}
+
+			closedir( pCurrDir );
+		}
+#endif
 	}
 
 	for( auto& libPath : vecFoundFiles )
@@ -816,26 +868,30 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 	lib.strScratchLib = lib.strPath;
 #endif // BINDEROOHOST_RAPIDITERATION
 
-#if BINDEROOHOST_LOADLIBRARYA
-	HMODULE hModule = LoadLibraryA( lib.strScratchLib.c_str() );
-#else // Wide char load library
-	const size_t BufferSize = 1024;
-	wchar_t WideBuffer[ BufferSize ];
-	MultiByteToWideChar( CP_ACP, MB_PRECOMPOSED, lib.strScratchLib.c_str(), -1, WideBuffer, BufferSize );
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
+	#if BINDEROOHOST_LOADLIBRARYA
+		HMODULE hModule = LoadLibraryA( lib.strScratchLib.c_str() );
+	#else // Wide char load library
+		const size_t BufferSize = 1024;
+		wchar_t WideBuffer[ BufferSize ];
+		MultiByteToWideChar( CP_ACP, MB_PRECOMPOSED, lib.strScratchLib.c_str(), -1, WideBuffer, BufferSize );
 
-	HMODULE hModule = LoadLibraryW( WideBuffer );
-#endif // BINDEROOHOST_LOADLIBRARYA
+		HMODULE hModule = LoadLibraryW( WideBuffer );
+	#endif // BINDEROOHOST_LOADLIBRARYA
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	ModuleHandle hModule = dlopen( lib.strScratchLib.c_str(), RTLD_LAZY );
+#endif // SYSAPI checks
 
 	if( hModule != nullptr )
 	{
-		ImportFunctionsFromPtr		importFunctionsFrom		= ( ImportFunctionsFromPtr )GetProcAddress( hModule, "importFunctionsFrom" );
-		GetExportedObjectsPtr		getExportedObjects		= ( GetExportedObjectsPtr )GetProcAddress( hModule, "getExportedObjects" );
-		GetExportedFunctionsPtr		getExportedFunctions	= ( GetExportedFunctionsPtr )GetProcAddress( hModule, "getExportedFunctions" );
-		CreateObjectByNamePtr		createObjectByName		= ( CreateObjectByNamePtr )GetProcAddress( hModule, "createObjectByName" );
-		CreateObjectByHashPtr		createObjectByHash		= ( CreateObjectByHashPtr )GetProcAddress( hModule, "createObjectByHash" );
-		DestroyObjectByNamePtr		destroyObjectByName		= ( DestroyObjectByNamePtr )GetProcAddress( hModule, "destroyObjectByName" );
-		DestroyObjectByHashPtr		destroyObjectByHash		= ( DestroyObjectByHashPtr )GetProcAddress( hModule, "destroyObjectByHash" );
-		GenerateBindingDeclarationsForAllObjectsPtr generateCPPStyleBindingDeclarationsForAllObjects = ( GenerateBindingDeclarationsForAllObjectsPtr )GetProcAddress( hModule, "generateCPPStyleBindingDeclarationsForAllObjects" );
+		ImportFunctionsFromPtr		importFunctionsFrom		= ( ImportFunctionsFromPtr )GetModuleSymbolAddress( hModule, "importFunctionsFrom" );
+		GetExportedObjectsPtr		getExportedObjects		= ( GetExportedObjectsPtr )GetModuleSymbolAddress( hModule, "getExportedObjects" );
+		GetExportedFunctionsPtr		getExportedFunctions	= ( GetExportedFunctionsPtr )GetModuleSymbolAddress( hModule, "getExportedFunctions" );
+		CreateObjectByNamePtr		createObjectByName		= ( CreateObjectByNamePtr )GetModuleSymbolAddress( hModule, "createObjectByName" );
+		CreateObjectByHashPtr		createObjectByHash		= ( CreateObjectByHashPtr )GetModuleSymbolAddress( hModule, "createObjectByHash" );
+		DestroyObjectByNamePtr		destroyObjectByName		= ( DestroyObjectByNamePtr )GetModuleSymbolAddress( hModule, "destroyObjectByName" );
+		DestroyObjectByHashPtr		destroyObjectByHash		= ( DestroyObjectByHashPtr )GetModuleSymbolAddress( hModule, "destroyObjectByHash" );
+		GenerateBindingDeclarationsForAllObjectsPtr generateCPPStyleBindingDeclarationsForAllObjects = ( GenerateBindingDeclarationsForAllObjectsPtr )GetModuleSymbolAddress( hModule, "generateCPPStyleBindingDeclarationsForAllObjects" );
 
 		if( importFunctionsFrom && getExportedObjects && getExportedFunctions && createObjectByName && createObjectByHash && destroyObjectByName && destroyObjectByHash && generateCPPStyleBindingDeclarationsForAllObjects )
 		{
@@ -879,7 +935,11 @@ void binderoo::HostImplementation::unloadDynamicLibrary( binderoo::HostDynamicLi
 	}
 #endif // BINDEROOHOST_RAPIDITERATION
 
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
 	FreeLibrary( lib.hModule );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	dlclose( lib.hModule );
+#endif // SYSAPI check
 
 #if BINDEROOHOST_RAPIDITERATION
 	InternalString strErrorMessage = "Failed to delete ";
