@@ -28,8 +28,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //----------------------------------------------------------------------------
 
 #include "fileutils.h"
-
-#include <Windows.h>
 //----------------------------------------------------------------------------
 
 

@@ -30,12 +30,20 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "sharedevent.h"
 //----------------------------------------------------------------------------
 
+#if BIND_SYSAPI == BIND_SYSAPI_POSIX
+	#include <fcntl.h>
+	#include <sys/stat.h>
+
+	#define INVALID_HANDLE_VALUE nullptr
+#endif 
+
 binderoo::SharedEvent::SharedEvent()
 	: hEvent( INVALID_HANDLE_VALUE )
 {
 }
 //----------------------------------------------------------------------------
 
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
 binderoo::SharedEvent::SharedEvent( binderoo::DString strEventName )
 	: hEvent( INVALID_HANDLE_VALUE )
 {
@@ -82,6 +90,60 @@ bool binderoo::SharedEvent::waitOn( uint32_t uMilliseconds )
 
 	return false;
 }
+//----------------------------------------------------------------------------
+
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+// TODO: Posix semaphores might need to switch over to unnamed, shared memory
+// semaphores. See http://man7.org/linux/man-pages/man7/sem_overview.7.html
+
+binderoo::SharedEvent::SharedEvent( binderoo::DString strEventName )
+	: hEvent( INVALID_HANDLE_VALUE )
+{
+	sem_t* hResolved = sem_open( strEventName.data(), O_CREAT, S_IRUSR | S_IWUSR, 0 );
+
+	if( hResolved != NULL )
+	{
+		// TODO: Work out if immediately unlinking makes things wrong or not...
+		//sem_unlink( strEventName.c_str() );
+		hEvent = hResolved;
+	}
+}
+//----------------------------------------------------------------------------
+
+binderoo::SharedEvent::~SharedEvent()
+{
+	if( hEvent != INVALID_HANDLE_VALUE )
+	{
+		sem_close( hEvent );
+	}
+}
+//----------------------------------------------------------------------------
+
+void binderoo::SharedEvent::signal()
+{
+	if( hEvent != INVALID_HANDLE_VALUE )
+	{
+		sem_post( hEvent );
+	}
+}
+//----------------------------------------------------------------------------
+
+bool binderoo::SharedEvent::waitOn( uint32_t uMilliseconds )
+{
+	if( hEvent != INVALID_HANDLE_VALUE )
+	{
+		uint32_t uSeconds = uMilliseconds / 1000;
+		uint32_t uNanoseconds = ( uMilliseconds % 1000 ) * 1000000;
+		timespec waitTime = { uSeconds, uNanoseconds };
+
+		return sem_timedwait( hEvent, &waitTime ) == 0;
+	}
+
+	return false;
+}
+//----------------------------------------------------------------------------
+
+#endif // BIND_SYSAPI checks
 //----------------------------------------------------------------------------
 
 //============================================================================

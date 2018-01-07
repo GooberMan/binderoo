@@ -34,7 +34,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "binderoo/defs.h"
 #include "binderoo/slice.h"
-#include <Windows.h>
+
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
+	#include <Windows.h>
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		#include <sys/stat.h>
+		#include <semaphore.h>
+#endif // OS check
 //----------------------------------------------------------------------------
 
 namespace binderoo
@@ -60,7 +66,11 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 	private:
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
 		HANDLE		hEvent;
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		sem_t*		hEvent;
+#endif
 	};
 	//------------------------------------------------------------------------
 }

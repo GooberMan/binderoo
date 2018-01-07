@@ -34,6 +34,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //----------------------------------------------------------------------------
 
 #include "binderoo/defs.h"
+
+#include <utility>
 //----------------------------------------------------------------------------
 
 namespace binderoo
@@ -135,17 +137,18 @@ namespace binderoo
 	//------------------------------------------------------------------------
 
 	template< AllocatorSpace eSpace, typename _ty, size_t _alignval = 16 >
-	class BIND_DLL Allocator : public AllocatorFunctions< eSpace >
+	class BIND_DLL Allocator
 	{
+		typedef AllocatorFunctions< eSpace > impl;
 	public:
 
-		typedef typename _ty			value_type;
-		typedef typename _ty*			pointer;
-		typedef const typename _ty*		const_pointer;
-		typedef typename _ty&			reference;
-		typedef const typename _ty&		const_reference;
-		typedef size_t					size_type;
-		typedef ptrdiff_t				difference_type;
+		typedef _ty						value_type;
+		typedef _ty*					pointer;
+		typedef const _ty*				const_pointer;
+		typedef _ty&					reference;
+		typedef const _ty&				const_reference;
+		typedef std::size_t				size_type;
+		typedef std::ptrdiff_t			difference_type;
 		//--------------------------------------------------------------------
 
 		enum : size_t
@@ -163,14 +166,14 @@ namespace binderoo
 		template< typename _newty >
 		struct rebind
 		{
-			typedef Allocator< eSpace, typename _newty, alignment > other;
+			typedef Allocator< eSpace, _newty, alignment > other;
 		};
 		//--------------------------------------------------------------------
 
 		BIND_INLINE						Allocator()									{ }
 		BIND_INLINE						Allocator( const Allocator& /*other*/ )		{ }
 		template< AllocatorSpace Space, typename _otherTy, size_t _otherA > 
-		BIND_INLINE						Allocator( const Allocator< Space, typename _otherTy, _otherA >& /*other*/ )	{ }
+		BIND_INLINE						Allocator( const Allocator< Space, _otherTy, _otherA >& /*other*/ )	{ }
 		BIND_INLINE						~Allocator()								{ }
 		//--------------------------------------------------------------------
 
@@ -188,7 +191,7 @@ namespace binderoo
 
 		BIND_INLINE pointer				allocate( size_type count )
 		{
-			return reinterpret_cast< pointer >( alloc( count * value_type_size, alignment ) );
+			return reinterpret_cast< pointer >( impl::alloc( count * value_type_size, alignment ) );
 		}
 		//--------------------------------------------------------------------
 
@@ -200,7 +203,7 @@ namespace binderoo
 
 		BIND_INLINE void				deallocate( pointer pPointer, size_type /*count*/ )
 		{
-			return free( pPointer );
+			return impl::free( pPointer );
 		}
 		//--------------------------------------------------------------------
 
@@ -210,7 +213,7 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-#if BIND_CPPVERSION == BIND_MSVC2012
+#if BIND_STANDARD == BIND_STANDARD_MSVC2012
 		template< typename _otherA, typename Args >
 		BIND_INLINE void				construct( _otherA* pPointer, Args&& args )
 		{
@@ -236,8 +239,9 @@ namespace binderoo
 	//------------------------------------------------------------------------
 
 	template< AllocatorSpace eSpace, size_t _alignval >
-	class BIND_DLL Allocator< eSpace, void, _alignval > : public AllocatorFunctions< eSpace >
+	class BIND_DLL Allocator< eSpace, void, _alignval >
 	{
+		typedef AllocatorFunctions< eSpace > impl;
 	public:
 		typedef void					value_type;
 		typedef void*					pointer;
@@ -255,19 +259,19 @@ namespace binderoo
 		template< typename _newty >
 		struct rebind
 		{
-			typedef Allocator< eSpace, typename _newty, alignment > other;
+			typedef Allocator< eSpace, _newty, alignment > other;
 		};
 		//--------------------------------------------------------------------
 
 		BIND_INLINE						Allocator()									{ }
 		BIND_INLINE						Allocator( const Allocator& /*other*/ )		{ }
 		template< AllocatorSpace Space, typename _otherTy, size_t _otherA > 
-		BIND_INLINE						Allocator( const Allocator< Space, typename _otherTy, _otherA >& /*other*/ )	{ }
+		BIND_INLINE						Allocator( const Allocator< Space, _otherTy, _otherA >& /*other*/ )	{ }
 		BIND_INLINE						~Allocator()								{ }
 		//--------------------------------------------------------------------
 
 		template< AllocatorSpace Space, typename _otherTy, size_t _otherA >
-		BIND_INLINE bool				operator==( const Allocator< Space, typename _otherTy, _otherA >& /*rhs*/ )		{ return true; }
+		BIND_INLINE bool				operator==( const Allocator< Space,  _otherTy, _otherA >& /*rhs*/ )		{ return true; }
 		//--------------------------------------------------------------------
 	};
 }

@@ -36,7 +36,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "binderoo/allocator.h"
 #include "binderoo/containers.h"
 
-#include <Windows.h>
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
+	#include <Windows.h>
+#else
+	#include <sys/types.h>
+	#include <sys/stat.h>
+	#include <unistd.h>
+#endif // Windows check
 
 namespace binderoo
 {
@@ -47,12 +53,17 @@ namespace binderoo
 
 		static ThisInternalString getTempDirectory()
 		{
-			binderoo::Containers< eSpace >::InternalString strTempPath;
+			ThisInternalString strTempPath;
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
 			DWORD dTempPathLength = GetTempPath( 0, nullptr );
 			strTempPath.resize( dTempPathLength - 1 );
 			GetTempPath( dTempPathLength, (char*)strTempPath.data() );
 			std::replace( strTempPath.begin(), strTempPath.end(), '\\', '/' );
 			strTempPath += "binderoo/";
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+			// TODO: Change this to XDG temp directory
+			strTempPath = "/var/tmp/binderoo/";
+#endif // OS check
 
 			return strTempPath;
 		}
@@ -60,24 +71,36 @@ namespace binderoo
 
 		static bool exists( const ThisInternalString& strFileOrDirectory )
 		{
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
 			DWORD dPathAttributes = GetFileAttributes( strFileOrDirectory.c_str() );
-
 			return dPathAttributes != INVALID_FILE_ATTRIBUTES;
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+			return access( strFileOrDirectory.c_str(), F_OK ) == 0;
+#endif
 		}
 		//--------------------------------------------------------------------
 
 		static bool isDirectory( const ThisInternalString& strFileOrDirectory )
 		{
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
 			DWORD dPathAttributes = GetFileAttributes( strFileOrDirectory.c_str() );
-
 			return dPathAttributes != INVALID_FILE_ATTRIBUTES && ( dPathAttributes & FILE_ATTRIBUTE_DIRECTORY ) != 0;
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+			struct stat objectStats;
+			return stat( strFileOrDirectory.c_str(), &objectStats ) == 0
+					&& S_ISDIR( objectStats.st_mode );
+#endif
 		}
 		//--------------------------------------------------------------------
 
 		// TODO: Make it recursive
 		static void createDirectory( const ThisInternalString& strDirectory )
 		{
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI
 			CreateDirectory( strDirectory.c_str(), NULL );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+			mkdir( strDirectory.c_str() );
+#endif
 		}
 		//--------------------------------------------------------------------
 	};

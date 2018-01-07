@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // * return_type        - Return type of the function. Can be void.
 // * object_type        - If it is a member function of a class or struct,
 //                        this will be the type. Can be void.
-// * signature          - A typedef of the function’s type. No more writing
+// * signature          - A typedef of the functionï¿½s type. No more writing
 //                        messy syntax for you.
 // * num_args           - The number of parameters the function can accept.
 // * is_member_method   - True if object_type != void.
@@ -77,7 +77,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //----------------------------------------------------------------------------
 
 #include "binderoo/defs.h"
-#include "binderoo/functionTraits_vs2012.inl"
+
+#if BIND_STANDARD == BIND_STANDARD_MSVC2012
+  #include "binderoo/functiontraits_vs2012.inl"
+#else
+  #include "binderoo/functiontraits_cpp11.inl"
+#endif // BIND_STANDARD checks
 //----------------------------------------------------------------------------
 
 #define BIND_FUNCTION_TRAITS_OF( func ) binderoo::FunctionTraits< decltype( &func ) >
@@ -89,7 +94,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace binderoo
 {
-	template< typename _ty >
+  template< typename _ty >
 	struct FunctionTraits : public functiontraits::Implementation< _ty >
 	{
 	};

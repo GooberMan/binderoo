@@ -176,10 +176,7 @@ namespace functiontraits
 	template< typename _ty >
 	struct Implementation
 	{
-		Implementation()
-		{
-			cause_an_error_please;
-		}
+		static_assert( sizeof( _ty ) == 0, "Non-function passed to function traits!" );
 	};
 	//------------------------------------------------------------------------
 

@@ -46,35 +46,34 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace binderoo
 {
+	template< typename _ty >
+	struct LengthOf
+	{
+		template< size_t length >
+		static BIND_INLINE size_t get( _ty( &data )[ length ] ) { return length; }
+	};
+	//------------------------------------------------------------------------
+
+	template<>
+	struct LengthOf< char >
+	{
+		template< size_t length >
+		static BIND_INLINE size_t get( char( &data )[ length ] ) { return data[ length - 1 ] ? length : length - 1; }
+	};
+	//------------------------------------------------------------------------
+
+	template<>
+	struct LengthOf< const char >
+	{
+		template< size_t length >
+		static BIND_INLINE size_t get( const char( &data )[ length ] ) { return data[ length - 1 ] ? length : length - 1; }
+	};
+	//------------------------------------------------------------------------
+
 	// A slice is little more than a data pointer. It implies no ownership whatsoever.
 	template< typename _ty >
 	struct Slice
 	{
-	private:
-		template< typename _ty >
-		struct LengthOf
-		{
-			template< size_t length >
-			static BIND_INLINE size_t get( _ty( &data )[ length ] ) { return length; }
-		};
-		//--------------------------------------------------------------------
-
-		template<>
-		struct LengthOf< char >
-		{
-			template< size_t length >
-			static BIND_INLINE size_t get( _ty( &data )[ length ] ) { return data[ length - 1 ] ? length : length - 1; }
-		};
-		//--------------------------------------------------------------------
-
-		template<>
-		struct LengthOf< const char >
-		{
-			template< size_t length >
-			static BIND_INLINE size_t get( _ty( &data )[ length ] ) { return data[ length - 1 ] ? length : length - 1; }
-		};
-		//--------------------------------------------------------------------
-
 	public:
 		BIND_INLINE Slice()
 			: uLength( 0 )
