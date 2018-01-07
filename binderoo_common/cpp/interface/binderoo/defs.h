@@ -36,45 +36,131 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdint>
 #include "fastdelegate/fastdelegate.h"
 
-#define BIND_CPP11				0
-#define BIND_MSVC2012			1
+// The macro BIND_COMPILER will evaluate to one of these
+#define BIND_COMPILER_MSVC				0
+#define BIND_COMPILER_CLANG				1
+#define BIND_COMPILER_GCC				2
 
-#if defined( _MSC_VER ) && _MSC_VER < 1900
-	#define BIND_CPPVERSION		BIND_MSVC2012
+// The macro BIND_COMPILERVER will evaluate to one of these
+#define BIND_COMPILERVER_MSVC2012		0
+#define BIND_COMPILERVER_MSVC2015		1
+#define BIND_COMPILERVER_MSVC2017		2
+
+#define BIND_COMPILERVER_CLANG380		3
+
+// The macro BIND_STANDARD will evaluate to one of these
+#define BIND_STANDARD_MSVC2012			0
+#define BIND_STANDARD_CPP11				1
+#define BIND_STANDARD_CPP14				2
+
+// The macro BIND_OS will evaluate to one of these
+#define BIND_OS_WINDOWS					0
+#define BIND_OS_LINUX					1
+#define BIND_OS_ANDROID					2
+#define BIND_OS_OSX						3
+#define BIND_OS_IOS						4
+
+// The macro BIND_OSDETAIL will evaluate to one of these
+#define BIND_OSDETAIL_GENERIC			0
+#define BIND_OSDETAIL_WIN7				1
+#define BIND_OSDETAIL_WIN10				2
+
+// The macro BIND_SYSAPI will evaluate to one of these
+#define BIND_SYSAPI_WINAPI				0
+#define BIND_SYSAPI_UWP					1
+#define BIND_SYSAPI_POSIX				2
+
+#if defined( _MSC_VER ) // Microsoft compiler
+	#define BIND_COMPILER 				BIND_COMPILER_MSVC
+	#if _MSC_VER >= 1700 && _MSC_VER < 1900
+		#define BIND_COMPILERVER 		BIND_COMPILERVER_MSVC2012
+	#elif _MSC_VER < 1910
+		#define BIND_COMPILERVER 		BIND_COMPILERVER_MSVC2015
+	#elif _MSC_VER >= 1901
+		#define BIND_COMPILERVER 		BIND_COMPILERVER_MSVC2017
+	#else
+		static_assert( false, "Unsupported MSVC detected! Versions older than VS2012 are not supported, while versions greater than VS2017 rely on VS2017 support working." );
+	#endif // _MSC_VER checks
+#elif defined( __clang__ ) // Clang
+	#define BIND_COMPILER 				BIND_COMPILER_CLANG
+	#if __clang_major__ == 3 && __clang_minor__ >= 8
+		#define BIND_COMPILERVER 		BIND_COMPILERVER_CLANG380
+	#elif __clang_major__ > 3 // Falling back to clang 3.8 minimum support
+		#define BIND_COMPILERVER 		BIND_COMPILERVER_CLANG380
+	#else
+		static_assert( false, "Unsupported clang detected! 3.8 is the minimum required version." );
+	#endif // __clang checks
+#else // Unsupported
+	static_assert( false, "Unsupported compiler detected! Binderoo needs to know your compiler in order to compile correctly. Clang and MSVC are the currently supported C++ compilers." );
+#endif // compiler checks
+
+
+#if BIND_COMPILER == BIND_COMPILER_MSVC && BIND_COMPILERVER == BIND_COMPILERVER_MSVC2012
+	#define BIND_STANDARD				BIND_STANDARD_MSVC2012
 #else
-	#define BIND_CPPVERSION		BIND_CPP11
+	#define BIND_STANDARD				BIND_STANDARD_CPP14
 #endif // C++ version checks
 
-#if defined( BINDEROO_EXPORT )
-	#define BIND_DLL			__declspec( dllexport )
+#if defined( _WIN32 ) && _WIN32 == 1
+	// Compiling for Windows
+	#define BIND_OS 					BIND_OS_WINDOWS
+	#include <Windows.h>
+	#if WINVER >= 0x0601 && WINVER <= 0x0603
+		#define BIND_SYSAPI				BIND_SYSAPI_WINAPI
+		#define BIND_OSDETAIL 			BIND_OSDETAIL_WIN7
+	#elif WINVER >= 0x0A00
+		#define BIND_OSDETAIL 			BIND_OSDETAIL_WIN10
+		#if WINAPI_FAMILY == WINAPI_FAMILY_DESKTOP_APP
+			#define BIND_OSDETAIL		BIND_SYSAPI_WINAPI
+		#else
+			#define BIND_OSDETAIL		BIND_SYSAPI_UWP
+		#endif // Family check
+	#else
+		static_assert( false, "Invalid Windows API version detected! You must use the Windows 7 WinAPI or greater." );
+	#endif // Windows version checks
+#elif defined( __gnu_linux__ ) && __gnu_linux__ == 1
+	// Compiling for Linux
+	#define BIND_OS 					BIND_OS_LINUX
+	#define BIND_SYSAPI					BIND_SYSAPI_POSIX
+	#define BIND_OSDETAIL				BIND_OSDETAIL_JUSTLINUX
 #else
-	#define BIND_DLL			__declspec( dllimport )
-#endif // Host mode check
+	static_assert( false, "Invalid OS detected! Binderoo only supports Windows and Linux currently." );
+#endif // OS checks
 
-#ifdef _MSC_VER
+#if BIND_COMPILER == BIND_COMPILER_MSVC
+	#if defined( BINDEROO_EXPORT )
+		#define BIND_DLL				__declspec( dllexport )
+	#else
+		#define BIND_DLL				__declspec( dllimport )
+	#endif // Host mode check
+#else
+	#define BIND_DLL
+#endif
+
+#if BIND_COMPILER == BIND_COMPILER_MSVC
 #pragma warning( disable: 4251 )
 #endif
 
-#define BIND_C_CALL			__cdecl
-#define BIND_C_NAMING		extern "C"
+#define BIND_C_CALL						__cdecl
+#define BIND_C_NAMING					extern "C"
 
-#ifdef _MSC_VER
-#define BIND_INLINE			__forceinline
-#define BIND_NOINLINE		__declspec( noinline )
-#elif defined (__clang__)
-#define BIND_INLINE			inline __attribute__((always_inline))
-#define BIND_NOINLINE		__attribute__((noinline))
+#if BIND_COMPILER == BIND_COMPILER_MSVC
+	#define BIND_INLINE					__forceinline
+	#define BIND_NOINLINE				__declspec( noinline )
+#elif BIND_COMPILER == BIND_COMPILER_CLANG
+	#define BIND_INLINE					inline __attribute__((always_inline))
+	#define BIND_NOINLINE				__attribute__((noinline))
 #endif
 
-#define BIND_ABSTRACT		abstract
-#define BIND_OVERRIDE		override
+#define BIND_ABSTRACT					abstract
+#define BIND_OVERRIDE					override
 
-#if BIND_CPPVERSION == BIND_MSVC2012
-	#define BIND_ALIGN( x )		__declspec( align( x ) )
-	#define BIND_ALIGNOF( x )	__alignof( x )
+#if BIND_STANDARD == BIND_STANDARD_MSVC2012
+	#define BIND_ALIGN( x )				__declspec( align( x ) )
+	#define BIND_ALIGNOF( x )			__alignof( x )
 #else // anything but VC2012
-	#define BIND_ALIGN( x )		alignas( x )
-	#define BIND_ALIGNOF( x )	alignof( x )
+	#define BIND_ALIGN( x )				alignas( x )
+	#define BIND_ALIGNOF( x )			alignof( x )
 #endif // BIND_CPPVERSION check
 //----------------------------------------------------------------------------
 
@@ -90,26 +176,26 @@ namespace binderoo
 	template< typename _ty >
 	struct TypeNames
 	{
-		static BIND_INLINE const char* getCName() { static_assert( false, "Undefined type!" ); }
-		static BIND_INLINE const char* getDName() { static_assert( false, "Undefined type!" ); }
+		constexpr const char* getCName() { static_assert( sizeof( _ty ) == 0, "Undefined type! You must declare your type with BIND_TYPE_NAME!" ); return "<INVALID>"; }
+		constexpr const char* getDName() { static_assert( sizeof( _ty ) == 0, "Undefined type! You must declare your type with BIND_TYPE_NAME!" ); return "<INVALID>"; }
 	};
 }
 
 #define BIND_TYPE_NAME( FullCType, FullDName ) \
 template<> struct binderoo::TypeNames< FullCType > \
 { \
-	static BIND_INLINE const char* getCName() { return #FullCType; } \
-	static BIND_INLINE const char* getDName() { return #FullDName; } \
+	constexpr const char* getCName() { return #FullCType; } \
+	constexpr const char* getDName() { return #FullDName; } \
 };\
 template<> struct binderoo::TypeNames< FullCType* > \
 { \
-	static BIND_INLINE const char* getCName() { return #FullCType "*"; } \
-	static BIND_INLINE const char* getDName() { return #FullDName "*"; } \
+	constexpr const char* getCName() { return #FullCType "*"; } \
+	constexpr const char* getDName() { return #FullDName "*"; } \
 };\
 template<> struct binderoo::TypeNames< FullCType& > \
 { \
-	static BIND_INLINE const char* getCName() { return #FullCType "&"; } \
-	static BIND_INLINE const char* getDName() { return "ref " #FullDName; } \
+	constexpr const char* getCName() { return #FullCType "&"; } \
+	constexpr const char* getDName() { return "ref " #FullDName; } \
 };\
 
 BIND_TYPE_NAME( char, char )
