@@ -139,6 +139,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #if BIND_COMPILER == BIND_COMPILER_MSVC
 #pragma warning( disable: 4251 )
+
+// Misfires in VC2015.
+#pragma warning( disable: 4814 ) // in C++14 'constexpr' will not imply 'const'; consider explicitly specifying 'const'
+
 #endif
 
 #define BIND_C_CALL						__cdecl
