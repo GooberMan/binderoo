@@ -35,33 +35,313 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "binderoo/defs.h"
 #include "binderoo/slice.h"
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+//----------------------------------------------------------------------------
+
+template< typename _ty >
+struct Fetcher
+{
+	static BIND_INLINE _ty fetch( binderoo::DString& param )
+	{
+		return _ty();
+	}
+};
+//----------------------------------------------------------------------------
+
+template< typename _ty >
+struct Setter
+{
+	static BIND_INLINE void set( _ty& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+		pOutputBuffer[ 0 ] = 0;
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< const char* >
+{
+	static BIND_INLINE const char* fetch( binderoo::DString& param )
+	{
+		return param.data();
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< bool >
+{
+	static BIND_INLINE bool fetch( binderoo::DString& param )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		return _stricmp( "true", param.data() ) ? true
+												: atoi( param.data() ) != 0;
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		return strcasecmp( "true", param.data() ) ? true
+												: atoi( param.data() ) != 0;
+#endif
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< char >
+{
+	static BIND_INLINE char fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< unsigned char >
+{
+	static BIND_INLINE unsigned char fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< short >
+{
+	static BIND_INLINE short fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< unsigned short >
+{
+	static BIND_INLINE unsigned short fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< int >
+{
+	static BIND_INLINE int fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< unsigned int >
+{
+	static BIND_INLINE unsigned int fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< int64_t >
+{
+	static BIND_INLINE int64_t fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< uint64_t >
+{
+	static BIND_INLINE uint64_t fetch( binderoo::DString& param )
+	{
+		return atoi( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< float >
+{
+	static BIND_INLINE float fetch( binderoo::DString& param )
+	{
+		return (float)atof( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+
+template<> struct Fetcher< double >
+{
+	static BIND_INLINE double fetch( binderoo::DString& param )
+	{
+		return atof( param.data() );
+	}
+};
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< const char* >
+{
+	static BIND_INLINE void set( const char*& pVal, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+		pOutputPointer = pVal;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< bool >
+{
+	static BIND_INLINE void set( bool& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, val ? "true" : "false" );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, val ? "true" : "false" );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< char >
+{
+	static BIND_INLINE void set( char& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%d", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< unsigned char >
+{
+	static BIND_INLINE void set( unsigned char& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%d", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< short >
+{
+	static BIND_INLINE void set( short& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%d", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< unsigned short >
+{
+	static BIND_INLINE void set( unsigned short& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%d", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< int >
+{
+	static BIND_INLINE void set( int& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%d", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< unsigned int >
+{
+	static BIND_INLINE void set( unsigned int& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%d", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< int64_t >
+{
+	static BIND_INLINE void set( int64_t& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%" PRId64, val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%" PRId64, val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< uint64_t >
+{
+	static BIND_INLINE void set( uint64_t& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%" PRIu64, val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%" PRIu64, val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< float >
+{
+	static BIND_INLINE void set( float& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%f", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%f", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
+
+template< >	struct Setter< double >
+{
+	static BIND_INLINE void set( double& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
+	{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+		sprintf_s( pOutputBuffer, uBufferSize, "%f", val );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+		snprintf( pOutputBuffer, uBufferSize, "%f", val );
+#endif
+		pOutputPointer = pOutputBuffer;
+	}
+};
+//----------------------------------------------------------------------------
 
 class ParamHandler
 {
-	template< typename _ty >
-	struct Fetcher
-	{
-		static BIND_INLINE _ty fetch( binderoo::DString& param )
-		{
-			return _ty();
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< typename _ty >
-	struct Setter
-	{
-		static BIND_INLINE void set( _ty& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			pOutputBuffer[ 0 ] = 0;
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
 public:
 	ParamHandler( binderoo::Slice< binderoo::DString > params )
 		: sliceParameters( params )
@@ -97,235 +377,6 @@ private:
 	binderoo::Slice< binderoo::DString >	sliceParameters;
 	const char*								returnValue;
 	char									returnBuffer[ ReturnBufferSize ];
-
-	template<> struct Fetcher< const char* >
-	{
-		static BIND_INLINE const char* fetch( binderoo::DString& param )
-		{
-			return param.data();
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< bool >
-	{
-		static BIND_INLINE bool fetch( binderoo::DString& param )
-		{
-			return _stricmp( "true", param.data() ) ? true
-													: atoi( param.data() ) != 0;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< char >
-	{
-		static BIND_INLINE char fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< unsigned char >
-	{
-		static BIND_INLINE unsigned char fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< short >
-	{
-		static BIND_INLINE short fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< unsigned short >
-	{
-		static BIND_INLINE unsigned short fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< int >
-	{
-		static BIND_INLINE int fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< unsigned int >
-	{
-		static BIND_INLINE unsigned int fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< int64_t >
-	{
-		static BIND_INLINE int64_t fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< uint64_t >
-	{
-		static BIND_INLINE uint64_t fetch( binderoo::DString& param )
-		{
-			return atoi( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< float >
-	{
-		static BIND_INLINE float fetch( binderoo::DString& param )
-		{
-			return (float)atof( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template<> struct Fetcher< double >
-	{
-		static BIND_INLINE double fetch( binderoo::DString& param )
-		{
-			return atof( param.data() );
-		}
-	};
-	//------------------------------------------------------------------------
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< const char* >
-	{
-		static BIND_INLINE void set( const char*& pVal, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			pOutputPointer = pVal;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< bool >
-	{
-		static BIND_INLINE void set( bool& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, val ? "true" : "false" );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< char >
-	{
-		static BIND_INLINE void set( char& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< unsigned char >
-	{
-		static BIND_INLINE void set( unsigned char& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< short >
-	{
-		static BIND_INLINE void set( short& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< unsigned short >
-	{
-		static BIND_INLINE void set( unsigned short& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< int >
-	{
-		static BIND_INLINE void set( int& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< unsigned int >
-	{
-		static BIND_INLINE void set( unsigned int& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%d", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< int64_t >
-	{
-		static BIND_INLINE void set( int64_t& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%lld", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< uint64_t >
-	{
-		static BIND_INLINE void set( uint64_t& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%llu", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< float >
-	{
-		static BIND_INLINE void set( float& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%f", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
-
-	template< >	struct Setter< double >
-	{
-		static BIND_INLINE void set( double& val, char* pOutputBuffer, size_t uBufferSize, const char*& pOutputPointer )
-		{
-			sprintf_s( pOutputBuffer, uBufferSize, "%f", val );
-			pOutputPointer = pOutputBuffer;
-		}
-	};
-	//------------------------------------------------------------------------
 
 };
 //----------------------------------------------------------------------------

@@ -56,25 +56,45 @@ static void BIND_C_CALL test_unaligned_free( void* pObj )
 
 static void* BIND_C_CALL test_malloc( size_t objSize, size_t alignment )
 {
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
 	return _aligned_malloc( objSize, alignment );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	return aligned_alloc( alignment, objSize );
+#endif
 }
 //----------------------------------------------------------------------------
 
 static void BIND_C_CALL test_free( void* pObj )
 {
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
 	_aligned_free( pObj );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	free( pObj );
+#endif
 }
 //----------------------------------------------------------------------------
 
 static void* BIND_C_CALL test_calloc( size_t objCount, size_t objSize, size_t alignment )
 {
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
 	return _aligned_malloc( objCount * objSize, alignment );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	return aligned_alloc( alignment, objCount * objSize );
+#endif
 }
 //----------------------------------------------------------------------------
 
 static void* BIND_C_CALL test_realloc( void* pObj, size_t newObjSize, size_t alignment )
 {
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
 	return _aligned_realloc( pObj, newObjSize, alignment );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	// HOLY HELL THIS IS ENTIRELY UNSECURE GET A CORRECT SOLUTION ASAP
+	void* pNewObj = aligned_alloc( alignment, newObjSize );
+	memcpy( pNewObj, pObj, newObjSize );
+	free( pObj );
+	return pNewObj;
+#endif
 }
 //----------------------------------------------------------------------------
 
