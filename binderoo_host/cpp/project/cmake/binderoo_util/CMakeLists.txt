@@ -22,4 +22,4 @@ message( STATUS ${BINDEROO_UTIL_SOURCE})
 
 link_directories( ${BINDEROO_BINARY_DIRECTORY} )
 add_executable( binderoo_util ${BINDEROO_UTIL_SOURCE} )
-target_link_libraries( binderoo_util binderoo-host dl pthread )
+target_link_libraries( binderoo_util binderoo_host dl pthread )
