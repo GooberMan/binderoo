@@ -29,30 +29,32 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 module binderoo_client;
 
-import core.sys.windows.windows;
-import core.sys.windows.dll;
-
-extern(Windows)
-BOOL DllMain(HINSTANCE hInstance, ULONG ulReason, LPVOID pvReserved)
+version( Windows )
 {
-	final switch (ulReason)
+	import core.sys.windows.windows;
+	import core.sys.windows.dll;
+
+	extern(Windows)
+	BOOL DllMain(HINSTANCE hInstance, ULONG ulReason, LPVOID /*pvReserved*/)
 	{
-		case DLL_PROCESS_ATTACH:
-			dll_process_attach( hInstance, true );
-			break;
+		final switch (ulReason)
+		{
+			case DLL_PROCESS_ATTACH:
+				dll_process_attach( hInstance, true );
+				break;
 
-		case DLL_PROCESS_DETACH:
-			dll_process_detach( hInstance, true );
-			break;
+			case DLL_PROCESS_DETACH:
+				dll_process_detach( hInstance, true );
+				break;
 
-		case DLL_THREAD_ATTACH:
-			dll_thread_attach( true, true );
-			break;
+			case DLL_THREAD_ATTACH:
+				dll_thread_attach( true, true );
+				break;
 
-		case DLL_THREAD_DETACH:
-			dll_thread_detach( true, true );
-			break;
+			case DLL_THREAD_DETACH:
+				dll_thread_detach( true, true );
+				break;
+		}
+		return true;
 	}
-	return true;
 }
-
