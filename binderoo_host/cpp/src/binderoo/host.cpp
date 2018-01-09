@@ -76,6 +76,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #elif BIND_SYSAPI == BIND_SYSAPI_POSIX
 	#include <dirent.h>
 	#include <dlfcn.h>
+	#include <errno.h>
+	#include <unistd.h>
 
 	#define GetModuleSymbolAddress dlsym
 
@@ -685,7 +687,7 @@ void binderoo::HostImplementation::collectDynamicLibraries()
 			{
 				InternalString strFilename = InternalString( pCurrEntry->d_name );
 
-				if( std::equal( strFilename.rbegin(), strFilename.rend(), strExtension.rbegin() ) )
+				if( strFilename.length() > strExtension.length() && strFilename.substr( strFilename.length() - strExtension.length(), strExtension.length() ) == strExtension )
 				{
 					InternalString strFullFilename = strSearchPath + strFilename;
 					vecFoundFiles.push_back( strFullFilename );
@@ -693,6 +695,36 @@ void binderoo::HostImplementation::collectDynamicLibraries()
 			}
 
 			closedir( pCurrDir );
+		}
+		else
+		{
+			switch( errno )
+			{
+			case EACCES:
+				logError( "s: Permission denied." ); //, strSearchPath.c_str() );
+				break;
+			case EBADF:
+				logError( "fd is not a valid file descriptor opened for reading." );
+				break;
+			case EMFILE:
+				logError( "The per-process limit on the number of open file descriptors has been reached." );
+				break;
+			case ENFILE:
+				logError( "The system-wide limit on the total number of open files has been reached." );
+				break;
+			case ENOENT:
+				logError( "\"s\" does not exist, or is an empty string." ); //, strSearchPath.c_str() );
+				break;
+			case ENOMEM:
+				logError( "Insufficient memory to complete the directory search operation." );
+				break;
+			case ENOTDIR:
+				logError( "\"s\" is not a directory." ); //, strSearchPath.c_str() );
+				break;
+			default:
+				logError( "Unspecified error opening folder for search" );
+				break;
+			}
 		}
 #endif
 	}
@@ -880,6 +912,11 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 	#endif // BINDEROOHOST_LOADLIBRARYA
 #elif BIND_SYSAPI == BIND_SYSAPI_POSIX
 	ModuleHandle hModule = dlopen( lib.strScratchLib.c_str(), RTLD_LAZY );
+
+	if( !hModule )
+	{
+		logError( dlerror() );
+	}
 #endif // SYSAPI checks
 
 	if( hModule != nullptr )
