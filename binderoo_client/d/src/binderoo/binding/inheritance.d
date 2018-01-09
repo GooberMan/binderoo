@@ -110,13 +110,17 @@ string GenerateBindings( ThisType )()
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
-template RawFnPointerAlias( alias decl )
+version( LDC ) {}
+else
 {
-	struct Wrapper
+	template RawFnPointerAlias( alias decl )
 	{
-		mixin( decl );
+		struct Wrapper
+		{
+			mixin( decl );
+		}
+		alias RawFnPointerAlias = typeof( &Wrapper.prototype );
 	}
-	alias RawFnPointerAlias = typeof( &Wrapper.prototype );
 }
 //----------------------------------------------------------------------------
 
@@ -149,6 +153,8 @@ struct AllFoundMethods
 	FoundMethod[]	nonVirtualMembers;
 	FoundMethod[]	virtualMembers;
 	FoundMethod[]	staticMembers;
+
+	@property length() const { return staticMembers.length + nonVirtualMembers.length + virtualMembers.length; }
 }
 //----------------------------------------------------------------------------
 
@@ -163,7 +169,7 @@ template OverloadsOf( ThisType, alias thisMember )
 
 AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
 {
-	FoundMethod Rewrite( alias Function )( )
+	FoundMethod Rewrite( alias Function )( size_t iFuncIndex )
 	{
 		static if( HasUDA!( Function, BindMethod ) )
 		{
@@ -355,7 +361,17 @@ AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
 			{
 				strDParams = [ SuperType.stringof ~ "* thisptr" ] ~ strDParams;
 			}
-			method.DDeclForFnPointer = "import " ~ moduleName!SuperType ~ "; extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " prototype(" ~ strDParams.joinWith( ", " ) ~ ");";
+
+			version( LDC )
+			{
+				import std.conv : to;
+				method.DDeclForFnPointer = "extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " prototype" ~ to!string( iFuncIndex ) ~ "(" ~ strDParams.joinWith( ", " ) ~ "); typeof( &prototype" ~ to!string( iFuncIndex ) ~ " )";				
+			}
+			else
+			{
+				method.DDeclForFnPointer = "import " ~ moduleName!SuperType ~ "; extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " prototype(" ~ strDParams.joinWith( ", " ) ~ ");";
+			}
+
 			method.DVirtualOverrideName = SuperType.stringof ~ ".CPPLinkage_" ~ FunctionName;
 			static if( !is( ParamReturnType == void ) )
 			{
@@ -416,8 +432,8 @@ AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
 
 			foreach_reverse( ThisOverload; TheseOverloads )
 			{
-				enum ThisFoundMethod = Rewrite!ThisOverload;
-				static if( ThisType.StructType == InheritanceStructType.CPP )
+				FoundMethod ThisFoundMethod = Rewrite!ThisOverload( foundMethods.length );
+				if( ThisType.StructType == InheritanceStructType.CPP )
 				{
 					FoundMethod foundMethod = ThisFoundMethod;
 
@@ -442,9 +458,9 @@ AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
 						break;
 					}
 				}
-				else static if( ThisFoundMethod.RawImportData.eKind != BindRawImport.FunctionKind.Invalid )
+				else if( ThisFoundMethod.RawImportData.eKind != BindRawImport.FunctionKind.Invalid )
 				{
-					static assert( ThisFoundMethod.RawImportData.eKind == BindRawImport.FunctionKind.Virtual, "Bound method " ~ thisMember ~ " in D struct " ~ ThisType.stringof ~ " is not a virtual override!" );
+					//static assert( ThisFoundMethod.RawImportData.eKind == BindRawImport.FunctionKind.Virtual, "Bound method " ~ thisMember ~ " in D struct " ~ ThisType.stringof ~ " is not a virtual override!" );
 
 					import std.algorithm : find;
 
@@ -478,15 +494,33 @@ string GenerateVTable( FoundMethod[] VirtualMethods, bool bOriginatesVTable, boo
 	{
 		if( Method.bUseDVirtualOverride )
 		{
-			strOutput ~=	"\t\tRawFnPointerAlias!( \"" ~ Method.DDeclForFnPointer ~ "\" ) virtual" ~ iIndex.to!string ~ " = &" ~ Method.DVirtualOverrideName ~ EndStatement
-							~ EndLine;
+			version( LDC )
+			{
+				strOutput ~=	"\t\t" ~ Method.DDeclForFnPointer ~ " virtual" ~ iIndex.to!string ~ " = &" ~ Method.DVirtualOverrideName ~ EndStatement
+								~ EndLine;
+			}
+			else
+			{
+				strOutput ~=	"\t\tRawFnPointerAlias!( \"" ~ Method.DDeclForFnPointer ~ "\" ) virtual" ~ iIndex.to!string ~ " = &" ~ Method.DVirtualOverrideName ~ EndStatement
+								~ EndLine;
+			}
 		}
 		else
 		{
-			strOutput ~=	/+"\t\t@NoScriptVisibility" ~ EndLine
-							~+/ "\t\t" ~ Method.RawImportData.toUDAString ~ EndLine
-							~ "\t\tRawFnPointerAlias!( \"" ~ Method.DDeclForFnPointer ~ "\" ) virtual" ~ iIndex.to!string ~ EndStatement
-							~ EndLine;
+			version( LDC )
+			{
+				strOutput ~=	/+"\t\t@NoScriptVisibility" ~ EndLine
+								~+/ "\t\t" ~ Method.RawImportData.toUDAString ~ EndLine
+								~ "\t\t" ~ Method.DDeclForFnPointer ~ " virtual" ~ iIndex.to!string ~ EndStatement
+								~ EndLine;
+			}
+			else
+			{
+				strOutput ~=	/+"\t\t@NoScriptVisibility" ~ EndLine
+								~+/ "\t\t" ~ Method.RawImportData.toUDAString ~ EndLine
+								~ "\t\tRawFnPointerAlias!( \"" ~ Method.DDeclForFnPointer ~ "\" ) virtual" ~ iIndex.to!string ~ EndStatement
+								~ EndLine;
+			}
 		}
 	}
 
@@ -563,10 +597,20 @@ string GenerateMTable( FoundMethod[] NonVirtualMethods, FoundMethod[] StaticMeth
 
 	foreach( iIndex, Method; AllMethods )
 	{
-		strOutput ~=	/+"\t\t@NoScriptVisibility" ~ EndLine
-						~+/ "\t\t" ~ Method.RawImportData.toUDAString ~ EndLine
-						~ "\t\tRawFnPointerAlias!( \"" ~ Method.DDeclForFnPointer ~ "\" ) method" ~ iIndex.to!string ~ EndStatement
-						~ EndLine;
+		version( LDC )
+		{
+			strOutput ~=	/+"\t\t@NoScriptVisibility" ~ EndLine
+							~+/ "\t\t" ~ Method.RawImportData.toUDAString ~ EndLine
+							~ "\t\t" ~ Method.DDeclForFnPointer ~ " method" ~ iIndex.to!string ~ EndStatement
+							~ EndLine;
+		}
+		else
+		{
+			strOutput ~=	/+"\t\t@NoScriptVisibility" ~ EndLine
+							~+/ "\t\t" ~ Method.RawImportData.toUDAString ~ EndLine
+							~ "\t\tRawFnPointerAlias!( \"" ~ Method.DDeclForFnPointer ~ "\" ) method" ~ iIndex.to!string ~ EndStatement
+							~ EndLine;
+		}
 	}
 
 	strOutput ~=		"\t\tenum FunctionCount = " ~ AllMethods.length.to!string ~ EndStatement
