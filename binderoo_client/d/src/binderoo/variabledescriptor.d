@@ -200,7 +200,4 @@ template VariableDescriptorsByUDA( T, UDAs... )
 }
 //----------------------------------------------------------------------------
 
-@disable shared static this();
-@disable shared static ~this();
-
 //============================================================================
