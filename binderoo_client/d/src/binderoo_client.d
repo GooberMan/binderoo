@@ -31,8 +31,21 @@ module binderoo_client;
 
 version( Windows )
 {
+	pragma( msg, "Windows runtime startup compiling..." );
 	import core.sys.windows.windows;
 	import core.sys.windows.dll;
+
+	package HINSTANCE hThisInstance = null;
+
+	extern( C ) void binderoo_startup()
+	{
+		dll_process_attach( hThisInstance, true );
+	}
+
+	extern( C ) void binderoo_shutdown()
+	{
+		dll_process_detach( hInstance, true );
+	}
 
 	extern(Windows)
 	BOOL DllMain(HINSTANCE hInstance, ULONG ulReason, LPVOID /*pvReserved*/)
@@ -40,11 +53,10 @@ version( Windows )
 		final switch (ulReason)
 		{
 			case DLL_PROCESS_ATTACH:
-				dll_process_attach( hInstance, true );
+				hThisInstance = hInstance;
 				break;
 
 			case DLL_PROCESS_DETACH:
-				dll_process_detach( hInstance, true );
 				break;
 
 			case DLL_THREAD_ATTACH:
@@ -56,5 +68,19 @@ version( Windows )
 				break;
 		}
 		return true;
+	}
+}
+else version( linux )
+{
+	pragma( msg, "Linux runtime startup compiling..." );
+	import core.runtime;
+	extern( C ) void binderoo_startup()
+	{
+		Runtime.initialize();
+	}
+
+	extern( C ) void binderoo_shutdown()
+	{
+		Runtime.terminate();
 	}
 }

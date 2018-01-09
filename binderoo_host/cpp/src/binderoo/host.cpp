@@ -106,6 +106,7 @@ namespace binderoo
 	typedef Containers< AllocatorSpace::Host >::InternalString												InternalString;
 	typedef std::vector< InternalString, binderoo::Allocator< AllocatorSpace::Host, InternalString > >		InternalStringVector;
 
+	typedef void					( BIND_C_CALL *BinderooInitDeinitPtr )									( );
 	typedef void					( BIND_C_CALL *ImportFunctionsFromPtr )									( binderoo::Slice< binderoo::BoundFunction > functions );
 	typedef void					( BIND_C_CALL *GetExportedObjectsPtr )									( binderoo::Slice< binderoo::BoundObject >* pOutExportedObjects );
 	typedef void					( BIND_C_CALL *GetExportedFunctionsPtr )								( binderoo::Slice< binderoo::BoundFunction >* pOutExportedFunctions );
@@ -128,6 +129,7 @@ namespace binderoo
 	enum class DynamicLibStatus : int
 	{
 		NotLoaded,
+		ModuleInMemory,
 		LoadFailed,
 		CoreInterfaceNotFound,
 		Unloaded,
@@ -154,6 +156,8 @@ namespace binderoo
 		HostDynamicLib()
 			: hModule( nullptr )
 			, eStatus( DynamicLibStatus::NotLoaded )
+			, binderoo_startup( nullptr )
+			, binderoo_shutdown( nullptr )
 			, importFunctionsFrom( nullptr )
 			, getExportedObjects( nullptr )
 			, getExportedFunctions( nullptr )
@@ -174,6 +178,8 @@ namespace binderoo
 		ModuleHandle									hModule;
 		DynamicLibStatus								eStatus;
 
+		BinderooInitDeinitPtr							binderoo_startup;
+		BinderooInitDeinitPtr							binderoo_shutdown;
 		ImportFunctionsFromPtr							importFunctionsFrom;
 		GetExportedObjectsPtr							getExportedObjects;
 		GetExportedFunctionsPtr							getExportedFunctions;
@@ -921,19 +927,25 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 
 	if( hModule != nullptr )
 	{
-		ImportFunctionsFromPtr		importFunctionsFrom		= ( ImportFunctionsFromPtr )GetModuleSymbolAddress( hModule, "importFunctionsFrom" );
-		GetExportedObjectsPtr		getExportedObjects		= ( GetExportedObjectsPtr )GetModuleSymbolAddress( hModule, "getExportedObjects" );
-		GetExportedFunctionsPtr		getExportedFunctions	= ( GetExportedFunctionsPtr )GetModuleSymbolAddress( hModule, "getExportedFunctions" );
-		CreateObjectByNamePtr		createObjectByName		= ( CreateObjectByNamePtr )GetModuleSymbolAddress( hModule, "createObjectByName" );
-		CreateObjectByHashPtr		createObjectByHash		= ( CreateObjectByHashPtr )GetModuleSymbolAddress( hModule, "createObjectByHash" );
-		DestroyObjectByNamePtr		destroyObjectByName		= ( DestroyObjectByNamePtr )GetModuleSymbolAddress( hModule, "destroyObjectByName" );
-		DestroyObjectByHashPtr		destroyObjectByHash		= ( DestroyObjectByHashPtr )GetModuleSymbolAddress( hModule, "destroyObjectByHash" );
+		lib.hModule													= hModule;
+		lib.eStatus													= DynamicLibStatus::ModuleInMemory;
+
+		BinderooInitDeinitPtr		binderoo_startup				= ( BinderooInitDeinitPtr )GetModuleSymbolAddress( hModule, "binderoo_startup" );
+		BinderooInitDeinitPtr		binderoo_shutdown				= ( BinderooInitDeinitPtr )GetModuleSymbolAddress( hModule, "binderoo_shutdown" );
+		ImportFunctionsFromPtr		importFunctionsFrom				= ( ImportFunctionsFromPtr )GetModuleSymbolAddress( hModule, "importFunctionsFrom" );
+		GetExportedObjectsPtr		getExportedObjects				= ( GetExportedObjectsPtr )GetModuleSymbolAddress( hModule, "getExportedObjects" );
+		GetExportedFunctionsPtr		getExportedFunctions			= ( GetExportedFunctionsPtr )GetModuleSymbolAddress( hModule, "getExportedFunctions" );
+		CreateObjectByNamePtr		createObjectByName				= ( CreateObjectByNamePtr )GetModuleSymbolAddress( hModule, "createObjectByName" );
+		CreateObjectByHashPtr		createObjectByHash				= ( CreateObjectByHashPtr )GetModuleSymbolAddress( hModule, "createObjectByHash" );
+		DestroyObjectByNamePtr		destroyObjectByName				= ( DestroyObjectByNamePtr )GetModuleSymbolAddress( hModule, "destroyObjectByName" );
+		DestroyObjectByHashPtr		destroyObjectByHash				= ( DestroyObjectByHashPtr )GetModuleSymbolAddress( hModule, "destroyObjectByHash" );
 		GenerateBindingDeclarationsForAllObjectsPtr generateCPPStyleBindingDeclarationsForAllObjects = ( GenerateBindingDeclarationsForAllObjectsPtr )GetModuleSymbolAddress( hModule, "generateCPPStyleBindingDeclarationsForAllObjects" );
 
-		if( importFunctionsFrom && getExportedObjects && getExportedFunctions && createObjectByName && createObjectByHash && destroyObjectByName && destroyObjectByHash && generateCPPStyleBindingDeclarationsForAllObjects )
+		if( binderoo_startup && binderoo_shutdown && importFunctionsFrom && getExportedObjects && getExportedFunctions && createObjectByName && createObjectByHash && destroyObjectByName && destroyObjectByHash && generateCPPStyleBindingDeclarationsForAllObjects )
 		{
-			lib.hModule												= hModule;
 			lib.eStatus												= DynamicLibStatus::Ready;
+			lib.binderoo_startup									= binderoo_startup;
+			lib.binderoo_shutdown									= binderoo_shutdown;
 			lib.importFunctionsFrom									= importFunctionsFrom;
 			lib.getExportedObjects									= getExportedObjects;
 			lib.getExportedFunctions								= getExportedFunctions;
@@ -943,6 +955,7 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 			lib.destroyObjectByHash									= destroyObjectByHash;
 			lib.generateCPPStyleBindingDeclarationsForAllObjects	= generateCPPStyleBindingDeclarationsForAllObjects;
 
+			lib.binderoo_startup();
 			lib.importFunctionsFrom( binderoo::Slice< binderoo::BoundFunction >( vecExportedFunctions.data(), vecExportedFunctions.size() ) );
 
 			return true;
@@ -960,6 +973,22 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 
 void binderoo::HostImplementation::unloadDynamicLibrary( binderoo::HostDynamicLib& lib )
 {
+	if( lib.binderoo_shutdown )
+	{
+		lib.binderoo_shutdown();
+	}
+
+	lib.binderoo_startup											= nullptr;
+	lib.binderoo_shutdown											= nullptr;
+	lib.importFunctionsFrom											= nullptr;
+	lib.getExportedObjects											= nullptr;
+	lib.getExportedFunctions										= nullptr;
+	lib.createObjectByName											= nullptr;
+	lib.createObjectByHash											= nullptr;
+	lib.destroyObjectByName											= nullptr;
+	lib.destroyObjectByHash											= nullptr;
+	lib.generateCPPStyleBindingDeclarationsForAllObjects			= nullptr;
+
 #if BINDEROOHOST_RAPIDITERATION
 	HANDLE hProcess = GetCurrentProcess();
 
@@ -972,11 +1001,15 @@ void binderoo::HostImplementation::unloadDynamicLibrary( binderoo::HostDynamicLi
 	}
 #endif // BINDEROOHOST_RAPIDITERATION
 
+	if( lib.hModule )
+	{
 #if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
-	FreeLibrary( lib.hModule );
+		FreeLibrary( lib.hModule );
 #elif BIND_SYSAPI == BIND_SYSAPI_POSIX
-	dlclose( lib.hModule );
+		dlclose( lib.hModule );
 #endif // SYSAPI check
+		lib.hModule = nullptr;
+	}
 
 #if BINDEROOHOST_RAPIDITERATION
 	InternalString strErrorMessage = "Failed to delete ";
