@@ -45,9 +45,13 @@ enum QuarterPi( T ) = Pi!T * T( 0.25 );
 enum PercentOfPi( T, T percent ) = Pi!T * percent;
 //----------------------------------------------------------------------------
 
-enum Pi( T : VectorFloat ) = SIMDVector( Pi!float );
+version( LDC ) {}
+else { enum Pi( T : VectorFloat ) = SIMDVector( Pi!float ); }
 //----------------------------------------------------------------------------
 
+version( LDC ) { }
+else
+{
 auto SignMask( InputType, bool e1 = true, bool e2 = true, bool e3 = true, bool e4 = true )()
 {
 	enum Mask32Bit = 0x80000000;
@@ -149,8 +153,12 @@ auto SignMask( InputType, bool e1 = true, bool e2 = true, bool e3 = true, bool e
 
 	return GenerateConstant();
 }
+}
 //----------------------------------------------------------------------------
 
+version( LDC ) { }
+else
+{
 auto FullMask( InputType, bool e1 = true, bool e2 = true, bool e3 = true, bool e4 = true )()
 {
 	enum Mask32Bit = 0xFFFFFFFF;
@@ -238,6 +246,7 @@ auto FullMask( InputType, bool e1 = true, bool e2 = true, bool e3 = true, bool e
 		static assert( false, "Type " ~ InputType.stringof ~ " cannot generate a mask!" );
 	}
 	return GenerateConstant();
+}
 }
 //----------------------------------------------------------------------------
 

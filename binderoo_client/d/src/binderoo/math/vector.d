@@ -34,6 +34,9 @@ public import core.simd;
 import binderoo.math.constants;
 //----------------------------------------------------------------------------
 
+version( LDC ) {}
+else:
+
 public enum Merge
 {
 	LeftMask	= 0b010000,

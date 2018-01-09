@@ -37,6 +37,9 @@ import binderoo.math.constants;
 import core.stdc.math;
 //----------------------------------------------------------------------------
 
+version( LDC ) {}
+else:
+
 align( 16 )
 struct QuaternionFloat
 {

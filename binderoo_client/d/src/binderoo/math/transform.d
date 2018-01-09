@@ -34,6 +34,9 @@ public import binderoo.math.vector;
 public import binderoo.math.quaternion;
 //----------------------------------------------------------------------------
 
+version( LDC ) { }
+else:
+
 align( 16 )
 struct TransformFloat
 {
