@@ -57,6 +57,9 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 
 	static void initialiseModuleBinding()
 	{
+//		import std.stdio : writeln;
+//		writeln( "Initialising ", moduleName!(initialiseModuleBinding), " bindings on type ", Type.stringof, " only..." );
+
 		functionsToImport = generateImports!( Type )();
 		functionsToExport = generateExports!( Type )();
 		objectsToExport = generateObjects!( Type )();
@@ -74,15 +77,22 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 {
 	mixin BindModuleImplementation!( iCurrentVersion, AdditionalStaticThisCalls );
 
-	static void initialiseModuleBinding()
+	void initialiseModuleBinding()
 	{
-		functionsToImport = generateImports();
-		functionsToExport = generateExports();
-		objectsToExport = generateObjects();
+//		import std.stdio : writeln;
+//		writeln( "Initialising ", moduleName!(initialiseModuleBinding), " bindings..." );
 
-		registerImportFunctions( functionsToImport );
-		registerExportedFunctions( functionsToExport );
-		registerExportedObjects( objectsToExport );
+		auto theseFunctionsToImport = generateImports();
+		auto theseFunctionsToExport = generateExports();
+		auto theseObjectsToExport = generateObjects();
+
+		registerImportFunctions( theseFunctionsToImport );
+		registerExportedFunctions( theseFunctionsToExport );
+		registerExportedObjects( theseObjectsToExport );
+
+		functionsToImport = theseFunctionsToImport;
+		functionsToExport = theseFunctionsToExport;
+		objectsToExport = theseObjectsToExport;
 	}
 	//------------------------------------------------------------------------
 
@@ -95,6 +105,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 {
 	shared static this()
 	{
+		import std.stdio : writeln;
 		initialiseModuleBinding();
 
 		foreach( newCall; AdditionalStaticThisCalls )
@@ -106,9 +117,9 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 	private:
 
-	__gshared align( 64 ) BoundObject[]							objectsToExport;
-	__gshared align( 16 ) BoundFunction[]						functionsToImport;
-	__gshared align( 16 ) BoundFunction[]						functionsToExport;
+	__gshared BoundObject[]							objectsToExport;
+	__gshared BoundFunction[]						functionsToImport;
+	__gshared BoundFunction[]						functionsToExport;
 	//------------------------------------------------------------------------
 
 	template ModuleTypeDescriptors( ParentClass, Aliases... )
@@ -155,7 +166,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 	}
 	//------------------------------------------------------------------------
 
-	static BoundObject[] generateObjects( ObjectTypes... )()
+	BoundObject[] generateObjects( ObjectTypes... )()
 	{
 		BoundObject[] gatherFor( bool bRecursive, Types... )()
 		{
@@ -201,7 +212,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 	}
 	//------------------------------------------------------------------------
 
-	static BoundFunction[] generateImports( ImportTypes... )()
+	BoundFunction[] generateImports( ImportTypes... )()
 	{
 		BoundFunction.FunctionKind convert( BindRawImport.FunctionKind eKind )
 		{
@@ -231,6 +242,9 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			static if( IsStaticMember!( Type, TableStaticMember ) )
 			{
 				alias TableType = typeof( __traits( getMember, Type, TableStaticMember ) );
+
+				// import core.stdc.stdio : printf;
+				// printf( TableType.stringof ~ " grabber for type " ~ Type.stringof ~ "\n" );
 
 				static if( Type.StructType == InheritanceStructType.CPP )
 				{
@@ -332,7 +346,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 		}
 	}
 
-	static BoundFunction[] generateExports( ExportTypes... )()
+	BoundFunction[] generateExports( ExportTypes... )()
 	{
 		BoundFunction[] functionGrabber( Type, Symbols... )()
 		{
