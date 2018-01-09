@@ -100,19 +100,19 @@ static void* BIND_C_CALL test_realloc( void* pObj, size_t newObjSize, size_t ali
 
 static void BIND_C_CALL log_info( const char* pMessage )
 {
-	printf( "%s\n", pMessage );
+	fprintf( stdout, "%s\n", pMessage );
 }
 //----------------------------------------------------------------------------
 
 static void BIND_C_CALL log_warning( const char* pMessage )
 {
-	printf( "WARNING: %s\n", pMessage );
+	fprintf( stdout, "WARNING: %s\n", pMessage );
 }
 //----------------------------------------------------------------------------
 
 static void BIND_C_CALL log_error( const char* pMessage )
 {
-	printf( "ERROR: %s\n", pMessage );
+	fprintf( stderr, "ERROR: %s\n", pMessage );
 }
 //----------------------------------------------------------------------------
 
