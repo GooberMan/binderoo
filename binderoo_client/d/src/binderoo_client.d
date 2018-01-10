@@ -31,11 +31,10 @@ module binderoo_client;
 
 version( Windows )
 {
-	pragma( msg, "Windows runtime startup compiling..." );
 	import core.sys.windows.windows;
 	import core.sys.windows.dll;
 
-	package HINSTANCE hThisInstance = null;
+	__gshared HINSTANCE hThisInstance = null;
 
 	extern( C ) void binderoo_startup()
 	{
@@ -72,7 +71,6 @@ version( Windows )
 }
 else version( linux )
 {
-	pragma( msg, "Linux runtime startup compiling..." );
 	import core.runtime;
 	extern( C ) void binderoo_startup()
 	{
