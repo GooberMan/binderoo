@@ -29,29 +29,68 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 module binderoo_client;
 
+// D Runtime can't deal with pointer types being non-cyclic, so we ignore cyclic
+// dependencies.
+extern(C) __gshared string[] rt_options = [ "oncycle=ignore" ];
+
 version( Windows )
 {
 	import core.sys.windows.windows;
 	import core.sys.windows.dll;
 
+	import core.sync.mutex;
+
 	__gshared HINSTANCE hThisInstance = null;
 
-	extern( C ) void binderoo_startup()
+	// Deferring startup of the D runtime until after DLL_PROCESS_ATTACH
+	// often results in threads attaching to the DLL before we call
+	// binderoo_init from the host thread. This is bad as the runtime
+	// hasn't initialised. So in a quest for sanity - and extreme
+	// inefficiency - we mutex lock threads until the runtime has
+	// started up. A better way must be found, but this will do for
+	// now...
+	__gshared CRITICAL_SECTION mThisMutex;
+
+	private void initMutex()
+	{
+		InitializeCriticalSection( &mThisMutex );
+	}
+
+	private void acquireMutex()
+	{
+		EnterCriticalSection( &mThisMutex );
+	}
+
+	private void releaseMutex()
+	{
+		LeaveCriticalSection( &mThisMutex );
+	}
+
+	private void deinitMutex()
+	{
+		DeleteCriticalSection( &mThisMutex );
+	}
+
+	export extern( C ) void binderoo_startup()
 	{
 		dll_process_attach( hThisInstance, true );
+		releaseMutex();
 	}
 
-	extern( C ) void binderoo_shutdown()
+	export extern( C ) void binderoo_shutdown()
 	{
-		dll_process_detach( hInstance, true );
+		dll_process_detach( hThisInstance, true );
+		deinitMutex();
 	}
 
-	extern(Windows)
+	export extern(Windows)
 	BOOL DllMain(HINSTANCE hInstance, ULONG ulReason, LPVOID /*pvReserved*/)
 	{
 		final switch (ulReason)
 		{
 			case DLL_PROCESS_ATTACH:
+				initMutex();
+				acquireMutex();
 				hThisInstance = hInstance;
 				break;
 
@@ -59,11 +98,15 @@ version( Windows )
 				break;
 
 			case DLL_THREAD_ATTACH:
+				acquireMutex();
 				dll_thread_attach( true, true );
+				releaseMutex();
 				break;
 
 			case DLL_THREAD_DETACH:
+				acquireMutex();
 				dll_thread_detach( true, true );
+				releaseMutex();
 				break;
 		}
 		return true;
