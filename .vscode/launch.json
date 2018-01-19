@@ -12,7 +12,7 @@
             "args": [
                 "-f",
                 "../binderooclienttest",
-                "-gA"
+                "-ec++A"
             ],
             "cwd": "${workspaceRoot}",
             "sourceMap": {
