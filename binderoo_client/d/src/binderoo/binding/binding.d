@@ -294,6 +294,10 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 						imports ~= BoundFunction(	DString( ImportData.strCName )
 													, DString( ImportData.strCSignature )
+													, DString( "" )
+													, DString( "" )
+													, DString( "" )
+													, DString( "" )
 													, DString( CTypeData.name )
 													, DString( CTypeData.header )
 													, ImportData.strIncludeVersions.toSliceRecursive
@@ -367,11 +371,23 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 						enum FullName = fullyQualifiedName!( Symbol );
 						enum Signature = FunctionString!( Descriptor ).CSignature;
+						enum DDecl = FunctionString!( Descriptor ).DDecl;
+						enum CDecl = FunctionString!( Descriptor ).CDecl;
+						enum CSharpDecl = FunctionString!( Descriptor ).CSharpDecl;
+						enum ParamNames = FunctionString!( Descriptor ).ParameterNames;
 
-						//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
+						// pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
+						// pragma( msg, " -> D Declaration: " ~ DDecl );
+						// pragma( msg, " -> C Declaration: " ~ CDecl );
+						// pragma( msg, " -> C# Declaration: " ~ CSharpDecl );
+						// pragma( msg, " -> Parameter names: " ~ ParamNames );
 
 						foundExports ~= BoundFunction( DString( FullName )
 														, DString( Signature )
+														, DString( ParamNames )
+														, DString( CDecl )
+														, DString( DDecl )
+														, DString( CSharpDecl )
 														, DString( "" )
 														, DString( "" )
 														, Slice!DString.init
@@ -452,7 +468,7 @@ public void registerExportedObjects( BoundObject[] exports )
 }
 //----------------------------------------------------------------------------
 
-public string[] generateCPPStyleBindingDeclaration( BoundFunction[] functions )
+public string[] generateCPPStyleExportDeclaration( BoundFunction[] functions )
 {
 	import std.string;
 	import std.algorithm;
@@ -482,7 +498,7 @@ public string[] generateCPPStyleBindingDeclaration( BoundFunction[] functions )
 				"\n"
 				"// Dirty hack\n"
 				"#define _ALLOW_KEYWORD_MACROS\n"
-				"#define private public\n"
+				"#define private public\n"StdCall
 				"#define protected public";*/
 
 	outputs ~=	"#include \"binderoo/defs.h\"\n"
@@ -620,7 +636,7 @@ public string[] generateCPPStyleBindingDeclaration( BoundFunction[] functions )
 }
 //----------------------------------------------------------------------------
 
-public string generateCPPStyleBindingDeclarationsForAllObjects( string strVersion )
+public string generateCPPStyleExportDeclarationsForAllObjects( string strVersion )
 {
 	BoundFunction[] functions;
 
@@ -641,7 +657,7 @@ public string generateCPPStyleBindingDeclarationsForAllObjects( string strVersio
 
 	functions.sort!( ( a, b ) => a.iOrderInTable < b.iOrderInTable )();
 
-	string[] declarations = generateCPPStyleBindingDeclaration( functions );
+	string[] declarations = generateCPPStyleExportDeclaration( functions );
 
 	import std.stdio;
 	foreach( decl; declarations )
@@ -650,6 +666,179 @@ public string generateCPPStyleBindingDeclarationsForAllObjects( string strVersio
 	}
 
 	return declarations.joinWith( "\n//----------------------------------------------------------------------------\n" );
+}
+//----------------------------------------------------------------------------
+
+public string generateCSharpStyleImportDeclarationsForAllObjects( string strVersion )
+{
+	import std.stdio : writeln;
+	import std.array : split;
+
+
+	class CSharpObject
+	{
+		enum Type : int
+		{
+			Root = -1,
+			Namespace = 0,
+			StaticClass = 1,
+		}
+
+		this( Type t, string n = "root", CSharpObject r = null )
+		{
+			eType = t;
+			strName = n;
+			root = r;
+		}
+
+		Type						eType;
+		string 						strName;
+		BoundFunction*[]			arrFunctions;
+		CSharpObject[ string ]		subTypes;
+		CSharpObject				root;
+	}
+
+	enum Separator = "//----------------------------------------------------------------------------";
+	enum Blank = "";
+
+	string generateTabs( int depth )
+	{
+		string strTabs = "";
+		foreach ( thisDepth; 0 .. depth )
+		{
+			strTabs ~= '\t';
+		}
+
+		return strTabs;
+	}
+
+	string[] generateCSharpForFunction( BoundFunction* func, int depth )
+	{
+		string[] lines;
+
+		string strObjTabs = generateTabs( depth );
+		string strContentTabs = strObjTabs ~ '\t';
+		string strFuncName = ( cast(string)func.strFunctionName ).split( "." )[ $ - 1 ];
+		string strImportedFuncVarName = "func_" ~ strFuncName;
+		string strDelegateType = "Delegate" ~ strFuncName;
+
+		string[] strSplitApart = (cast(string)func.strFunctionSignature).split( '(' );
+		string strReturnType = strSplitApart[ 0 ];
+
+		strSplitApart = (cast(string)func.strCSharpPrototype).split( '(' );
+		string strParameters = "(" ~ strSplitApart[ 1 ];
+
+		lines ~= strObjTabs ~ "// Function " ~ cast(string)func.strFunctionName;
+		lines ~= strObjTabs ~ "private static ImportedFunction " ~ strImportedFuncVarName ~ ";";
+		lines ~= strObjTabs ~ "private delegate " ~ strReturnType ~ " " ~ strDelegateType ~ strParameters ~ ";";
+		lines ~= strObjTabs ~ "public " ~ cast(string)func.strCSharpPrototype;
+		lines ~= strObjTabs ~ "{";
+		lines ~= strContentTabs ~ "if( " ~ strImportedFuncVarName ~ " == null ) " ~ strImportedFuncVarName ~ " = new ImportedFunction( \"" ~ cast(string)func.strFunctionName ~ "\", \"" ~ cast(string)func.strFunctionSignature ~ "\" );";
+		lines ~= strContentTabs ~ strDelegateType ~ " call = (" ~ strDelegateType ~ ")Marshal.GetDelegateForFunctionPointer( " ~ strImportedFuncVarName ~ ".FuncPtr, typeof( " ~ strDelegateType ~ " ) );";
+		if( strReturnType == "void" )
+		{
+			lines ~= strContentTabs ~ "call( " ~ cast(string)func.strParameterNames ~ " );";
+		}
+		else
+		{
+			lines ~= strContentTabs ~ "return call(" ~ cast(string)func.strParameterNames ~ " );";
+		}
+		lines ~= strObjTabs ~ "}";
+		lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
+		lines ~= Blank;
+		return lines;
+	}
+
+	string[] generateCSharpForObject( CSharpObject obj, int depth = 0 )
+	{
+		string[] lines;
+
+		string strObjTabs = generateTabs( depth );
+		string strContentTabs = strObjTabs ~ '\t';
+
+		final switch( obj.eType ) with( CSharpObject.Type )
+		{
+			case Root:
+				lines ~= "using System;";
+				lines ~= "using System.Runtime.InteropServices;";
+				lines ~= "using binderoo;";
+				lines ~= Separator;
+				lines ~= Blank;
+
+				foreach( subObj; obj.subTypes.byValue )
+				{
+					lines ~= generateCSharpForObject( subObj, depth );
+				}
+				break;
+
+			case Namespace:
+				lines ~= strObjTabs ~ "namespace " ~ obj.strName;
+				lines ~= strObjTabs ~ "{";
+				foreach( subObj; obj.subTypes.byValue )
+				{
+					lines ~= generateCSharpForObject( subObj, depth + 1 );
+				}
+				lines ~= strObjTabs ~ "}";
+				lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
+				lines ~= Blank;
+				break;
+
+			case StaticClass:
+				lines ~= strObjTabs ~ "public static class " ~ obj.strName;
+				lines ~= strObjTabs ~ "{";
+				foreach( func; obj.arrFunctions )
+				{
+					lines ~= generateCSharpForFunction( func, depth + 1 );
+				}
+				lines ~= strObjTabs ~ "}";
+				lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
+				lines ~= Blank;
+				break;
+		}
+
+		return lines;
+	}
+
+	CSharpObject root = new CSharpObject( CSharpObject.Type.Root );
+
+	foreach( ref currFunction; exportFunctions )
+	{
+		string strFuncFullName = cast(string)currFunction.strFunctionName;
+
+		string[] strFuncSplitNames = strFuncFullName.split( '.' );
+		string strFuncFullNamespace = strFuncSplitNames[ 0 .. $ - 1 ].joinWith( "." );
+
+		CSharpObject currObj = root;
+
+		while( strFuncSplitNames.length > 2 )
+		{
+			CSharpObject* thisObj = strFuncSplitNames[ 0 ] in currObj.subTypes;
+			if( thisObj is null )
+			{
+				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strFuncSplitNames[ 0 ], currObj );
+				currObj.subTypes[ newObj.strName ] = newObj;
+			}
+
+			currObj = currObj.subTypes[ strFuncSplitNames[ 0 ] ];
+			strFuncSplitNames = strFuncSplitNames[ 1 .. $ ];
+		}
+
+		CSharpObject* thisClass = strFuncSplitNames[ 0 ] in currObj.subTypes;
+		if( thisClass is null )
+		{
+			currObj.subTypes[ strFuncSplitNames[ 0 ] ] = new CSharpObject( CSharpObject.Type.StaticClass, strFuncSplitNames[ 0 ], currObj );
+		}
+		currObj.subTypes[ strFuncSplitNames[ 0 ] ].arrFunctions ~= &currFunction;
+	}
+
+	string[] lines = generateCSharpForObject( root, 0 );
+
+	foreach( currLine; lines )
+	{
+		writeln( currLine );
+	}
+
+	return lines.joinWith( "\n" );
 }
 //----------------------------------------------------------------------------
 
@@ -764,7 +953,7 @@ export extern( C ) void destroyObjectByHash( ulong objectHash, void* pObj )
 
 alias BindingRawAllocator = extern( C ) void* function( size_t size );
 
-export extern( C ) const(char)* generateCPPStyleBindingDeclarationsForAllObjects( BindingRawAllocator allocator, const char* pVersion )
+export extern( C ) const(char)* generateCPPStyleExportDeclarationsForAllObjects( BindingRawAllocator allocator, const char* pVersion )
 {
 	import core.stdc.string;
 
@@ -774,7 +963,33 @@ export extern( C ) const(char)* generateCPPStyleBindingDeclarationsForAllObjects
 		strVersion = cast(string)pVersion[ 0 .. strlen( pVersion ) ];
 	}
 
-	string fullDeclaration = generateCPPStyleBindingDeclarationsForAllObjects( strVersion );
+	string fullDeclaration = generateCPPStyleExportDeclarationsForAllObjects( strVersion );
+
+	size_t outputSize = fullDeclaration.length + 1;
+	char* pOutput = cast(char*)allocator( outputSize );
+
+	if( fullDeclaration.length > 0 )
+	{
+		memcpy( pOutput, fullDeclaration.ptr, outputSize );
+	}
+
+	pOutput[ fullDeclaration.length ] = 0;
+
+	return pOutput;
+}
+//----------------------------------------------------------------------------
+
+export extern( C ) const(char)* generateCSharpStyleImportDeclarationsForAllObjects( BindingRawAllocator allocator, const char* pVersion )
+{
+	import core.stdc.string;
+
+	string strVersion;
+	if( pVersion )
+	{
+		strVersion = cast(string)pVersion[ 0 .. strlen( pVersion ) ];
+	}
+
+	string fullDeclaration = generateCSharpStyleImportDeclarationsForAllObjects( strVersion );
 
 	size_t outputSize = fullDeclaration.length + 1;
 	char* pOutput = cast(char*)allocator( outputSize );
