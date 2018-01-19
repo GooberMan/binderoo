@@ -27,14 +27,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 //----------------------------------------------------------------------------
 
-#pragma once
+#if defined( __cplusplus )
+	#pragma once
+#endif
 
 #if !defined( _BINDEROO_DEFS_H_ )
 #define _BINDEROO_DEFS_H_
 //----------------------------------------------------------------------------
 
-#include <cstdint>
-#include "fastdelegate/fastdelegate.h"
+#include <stdint.h>
+#include <stddef.h>
 
 // The macro BIND_COMPILER will evaluate to one of these
 #define BIND_COMPILER_MSVC				0
@@ -47,6 +49,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define BIND_COMPILERVER_MSVC2017		2
 
 #define BIND_COMPILERVER_CLANG380		3
+
+#define BIND_COMPILERVER_GCC540			4
 
 // The macro BIND_STANDARD will evaluate to one of these
 #define BIND_STANDARD_MSVC2012			0
@@ -90,6 +94,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#else
 		static_assert( false, "Unsupported clang detected! 3.8 is the minimum required version." );
 	#endif // __clang checks
+#elif defined( __GNUC__ )
+	#define BIND_COMPILER 				BIND_COMPILER_MSVC
+	#if __GNUC__ == 5 && __GNUC_MINOR__ >= 4
+		#define BIND_COMPILERVER		BIND_COMPILERVER_GCC_540
+	#elif __GNUC__ > 5
+		#define BIND_COMPILERVER		BIND_COMPILERVER_GCC_540
+	#else
+		static_assert( false, "Unsupported GCC detected! 5.4.0 is the minimum required version." );
+	#endif
 #else // Unsupported
 	static_assert( false, "Unsupported compiler detected! Binderoo needs to know your compiler in order to compile correctly. Clang and MSVC are the currently supported C++ compilers." );
 #endif // compiler checks
@@ -104,20 +117,25 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #if defined( _WIN32 ) && _WIN32 == 1
 	// Compiling for Windows
 	#define BIND_OS 					BIND_OS_WINDOWS
-	#include <Windows.h>
-	#if WINVER >= 0x0601 && WINVER <= 0x0603
-		#define BIND_SYSAPI				BIND_SYSAPI_WINAPI
-		#define BIND_OSDETAIL 			BIND_OSDETAIL_WIN7
-	#elif WINVER >= 0x0A00
-		#define BIND_OSDETAIL 			BIND_OSDETAIL_WIN10
-		#if WINAPI_FAMILY == WINAPI_FAMILY_DESKTOP_APP
-			#define BIND_OSDETAIL		BIND_SYSAPI_WINAPI
+	#if !defined( BINDEROO_FORCE_POSIX )
+		#include <Windows.h>
+		#if WINVER >= 0x0601 && WINVER <= 0x0603
+			#define BIND_OSDETAIL 		BIND_OSDETAIL_WIN7
+			#define BIND_SYSAPI			BIND_SYSAPI_WINAPI
+		#elif WINVER >= 0x0A00
+			#define BIND_OSDETAIL 		BIND_OSDETAIL_WIN10
+			#if WINAPI_FAMILY == WINAPI_FAMILY_DESKTOP_APP
+				#define BIND_SYSAPI		BIND_SYSAPI_WINAPI
+			#else
+				#define BIND_SYSAPI		BIND_SYSAPI_UWP
+			#endif // Family check
 		#else
-			#define BIND_OSDETAIL		BIND_SYSAPI_UWP
-		#endif // Family check
-	#else
-		static_assert( false, "Invalid Windows API version detected! You must use the Windows 7 WinAPI or greater." );
-	#endif // Windows version checks
+			static_assert( false, "Invalid Windows API version detected! You must use the Windows 7 WinAPI or greater." );
+		#endif // Windows version checks
+	#else // BINDEROO_FORCE_POSIX
+		#define BIND_OSDETAIL			BIND_OSDETAIL_GENERIC
+		#define BIND_SYSAPI				BIND_SYSAPI_POSIX
+	#endif // !defined( BINDEROO_FORCE_POSIX )
 #elif defined( __gnu_linux__ ) && __gnu_linux__ == 1
 	// Compiling for Linux
 	#define BIND_OS 					BIND_OS_LINUX
@@ -145,8 +163,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #endif
 
-#define BIND_C_CALL						__cdecl
-#define BIND_C_NAMING					extern "C"
+#if defined( __cplusplus )
+	#if BIND_COMPILER == BIND_COMPILER_MSVC
+		#define BIND_C_CALL					__cdecl
+	#elif BIND_COMPILER == BIND_COMPILER_GCC
+		#define BIND_C_CALL __attribute__ ( ( __cdecl__ ) )
+	#elif BIND_COMPILER == BIND_COMPILER_CLANG
+		#define BIND_C_CALL __attribute__( ( cdecl ) )
+	#endif
+	#define BIND_C_API_BEGIN			extern "C" {
+	#define BIND_C_API_END				}
+#else
+	#define BIND_C_CALL
+	#define BIND_C_API_BEGIN
+	#define BIND_C_API_END
+#endif // C++ check
 
 #if BIND_COMPILER == BIND_COMPILER_MSVC
 	#define BIND_INLINE					__forceinline
@@ -186,21 +217,23 @@ namespace binderoo
 }
 
 #define BIND_TYPE_NAME( FullCType, FullDName ) \
-template<> struct binderoo::TypeNames< FullCType > \
+namespace binderoo { \
+template<> struct TypeNames< FullCType > \
 { \
 	constexpr const char* getCName() { return #FullCType; } \
 	constexpr const char* getDName() { return #FullDName; } \
 };\
-template<> struct binderoo::TypeNames< FullCType* > \
+template<> struct TypeNames< FullCType* > \
 { \
 	constexpr const char* getCName() { return #FullCType "*"; } \
 	constexpr const char* getDName() { return #FullDName "*"; } \
 };\
-template<> struct binderoo::TypeNames< FullCType& > \
+template<> struct TypeNames< FullCType& > \
 { \
 	constexpr const char* getCName() { return #FullCType "&"; } \
 	constexpr const char* getDName() { return "ref " #FullDName; } \
 };\
+}\
 
 BIND_TYPE_NAME( char, char )
 BIND_TYPE_NAME( unsigned char, ubyte )
