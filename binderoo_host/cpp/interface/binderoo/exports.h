@@ -103,6 +103,7 @@ namespace binderoo
 		ExportedClass( int version, DString name, DString inherits, ExportedMethods pMethods )
 			: iVersion( version )
 			, strName( name )
+			, strBaseClass( inherits )
 			, methods( pMethods )
 			, pNext( nullptr )
 		{
