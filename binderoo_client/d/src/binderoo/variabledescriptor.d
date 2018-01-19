@@ -148,7 +148,7 @@ template VariableDescriptors( T )
 				alias ThisType = typeof( T.tupleof[ iIndex ] );
 				static if( IsUserType!( ThisType ) )
 				{
-					enum ModuleName = moduleName!( ThisType );
+					enum ModuleName = moduleName!( binderoo.traits.PointerTarget!ThisType );
 					if( !modules.canFind( ModuleName ) )
 					{
 						modules ~= ModuleName;
@@ -199,5 +199,8 @@ template VariableDescriptorsByUDA( T, UDAs... )
 	alias VariableDescriptorsByUDA = DescriptorsByUDA!( T, VariableDescriptors, UDAs );
 }
 //----------------------------------------------------------------------------
+
+@disable shared static this();
+@disable shared static ~this();
 
 //============================================================================

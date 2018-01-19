@@ -104,6 +104,12 @@ template IsUserType( T )
 }
 //----------------------------------------------------------------------------
 
+template IsUserType( T : A*, A )
+{
+	enum IsUserType = IsUserType!A;
+}
+//----------------------------------------------------------------------------
+
 template IsUserTypeButNotEnum( T )
 {
 	enum IsUserTypeButNotEnum = is( T == struct ) || is( T == class ) || is( T == interface ) || is( T == union );
@@ -280,7 +286,8 @@ template IsAssociativeArray( A : T[ E ], T, E )
 
 template IsSomeType( T )
 {
-	enum IsSomeType = true;
+	import std.traits : isFunctionPointer;
+	enum IsSomeType = !isFunctionPointer!( T );
 }
 //----------------------------------------------------------------------------
 
@@ -298,7 +305,8 @@ template IsSomeType( T : void )
 
 template IsSomeType( alias symbol )
 {
-	enum IsSomeType = is( symbol );
+	import std.traits : isFunctionPointer;
+	enum IsSomeType = is( symbol ) && !isFunctionPointer!( symbol );
 }
 //----------------------------------------------------------------------------
 
@@ -347,9 +355,15 @@ template PointerOf( T )
 }
 //----------------------------------------------------------------------------
 
-template PointerTarget( T : T* )
+template PointerTarget( T )
 {
 	alias PointerTarget = T;
+}
+//----------------------------------------------------------------------------
+
+template PointerTarget( T : A*, A )
+{
+	alias PointerTarget = PointerTarget!A;
 }
 //----------------------------------------------------------------------------
 
@@ -425,6 +439,13 @@ template IsTemplatedType( T )
 }
 //----------------------------------------------------------------------------
 
+template IsTemplatedType( T : U[], U )
+{
+	pragma( msg, U.stringof );
+	enum IsTemplatedType = IsTemplatedType!( U );
+}
+//----------------------------------------------------------------------------
+
 template IsTemplatedType( T : U!( Params ), alias U, Params... )
 {
 	enum IsTemplatedType = true;
@@ -462,34 +483,138 @@ template ZeroValue( T )
 }
 //----------------------------------------------------------------------------
 
-// This one currently fails under some circumstances.
-/+template FullyQualifiedNameInsideModule( T )
+string FullTypeName( Symbol )()
 {
-	static if( is( T : U*, U ) )
+	static if( is( Symbol A == const A ) )
 	{
-		enum FullyQualifiedNameInsideModule = FullyQualifiedNameInsideModule!( U ) ~ "*";
+		return "const(" ~ FullTypeName!( A ) ~ ")";
 	}
-	else static if( __traits( compiles, __traits( parent, T ) ) )
+	else static if( IsTemplatedType!Symbol )
 	{
-		alias Symbol = Identity!( __traits( parent, T ) );
-
-		static if( is( Symbol ) )
-		{
-			enum FullyQualifiedNameInsideModule = FullyQualifiedNameInsideModule!( Symbol ) ~ "." ~ T.stringof;
-		}
-		else
-		{
-			enum FullyQualifiedNameInsideModule = T.stringof;
-		}
-
+		return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) ) ~ "." ~ Symbol.stringof;
+	}
+	else static if( __traits( compiles, __traits( parent, Symbol ) ) )
+	{
+		return FullTypeName!( __traits( parent, Symbol ) ) ~ "." ~ Symbol.stringof;
 	}
 	else
 	{
-		enum FullyQualifiedNameInsideModule = T.stringof;
+		return Symbol.stringof;
 	}
 }
 //----------------------------------------------------------------------------
-+/
+
+string FullTypeName( alias Symbol )()
+{
+	import std.algorithm.searching : startsWith;
+	import std.traits : isSomeFunction;
+
+	static if( isSomeFunction!Symbol )
+	{
+		enum SymbolString = __traits( identifier, Symbol );
+	}
+	else static if( Symbol.stringof.startsWith( "module " ) )
+	{
+		enum SymbolString = Symbol.stringof[ 7 .. $ ];
+	}
+	else static if( Symbol.stringof.startsWith( "package " ) )
+	{
+		enum SymbolString = Symbol.stringof[ 8 .. $ ];
+	}
+	else
+	{
+		enum SymbolString = Symbol.stringof;
+	}
+
+	static if( __traits( compiles, __traits( parent, Symbol ) ) )
+	{
+		return FullTypeName!( __traits( parent, Symbol ) ) ~ "." ~ SymbolString;
+	}
+	else
+	{
+		return SymbolString;
+	}
+}
+//----------------------------------------------------------------------------
+
+string ModuleLocalTypeName( alias Symbol )()
+{
+	import std.algorithm.searching : startsWith;
+
+	static if( Symbol.stringof.startsWith( "module " )
+			|| Symbol.stringof.startsWith( "package " ) )
+	{
+		return "";
+	}
+	else
+	{
+		static if( is( Symbol A == const A ) )
+		{
+			return "const(" ~ ModuleLocalTypeName!( A ) ~ ")";
+		}
+		else static if( is( Symbol ) && IsTemplatedType!Symbol )
+		{
+			string strParent = ModuleLocalTypeName!( __traits( parent, TemplateOf!( Symbol ) ) );
+			if( strParent.length > 0 )
+			{
+				strParent ~= ".";
+			}
+			return strParent ~ Symbol.stringof;
+		}
+		else static if( __traits( compiles, __traits( parent, Symbol ) ) )
+		{
+			static if( __traits( parent, Symbol ).stringof.startsWith( "module " )
+					|| __traits( parent, Symbol ).stringof.startsWith( "package " ) )
+			{
+				return Symbol.stringof;
+			}
+			else
+			{
+				return ModuleLocalTypeName!( __traits( parent, Symbol ) ) ~ "." ~ Symbol.stringof;
+			}
+		}
+		else
+		{
+			return "";
+		}
+	}
+}
+//----------------------------------------------------------------------------
+
+string ModuleName( alias Symbol )()
+{
+	import std.algorithm.searching : startsWith;
+
+	static if( __traits( compiles, __traits( parent, Symbol ) ) )
+	{
+		static if( is( Symbol ) && IsTemplatedType!Symbol )
+		{
+			static if( __traits( parent, TemplateOf!( Symbol ) ).stringof.startsWith( "module " ) 
+				|| __traits( parent, TemplateOf!( Symbol ) ).stringof.startsWith( "package " ) )
+			{
+				return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) );
+			}
+			else
+			{
+				return ModuleName!( __traits( parent, TemplateOf!( Symbol ) ) );
+			}
+				
+		}
+		else static if( __traits( parent, Symbol ).stringof.startsWith( "module " ) 
+				|| __traits( parent, Symbol ).stringof.startsWith( "package " ) )
+		{
+			return FullTypeName!( __traits( parent, Symbol ) );
+		}
+		else
+		{
+			return ModuleName!( __traits( parent, Symbol ) );
+		}
+	}
+
+	return "";
+}
+//----------------------------------------------------------------------------
+
 string[] gatherImports( T )()
 {
 	// Not complete, does not parse member types correctly
