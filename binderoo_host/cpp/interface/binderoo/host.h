@@ -148,6 +148,7 @@ namespace binderoo
 		// the required #defines to bind a C++ object to the system
 		const char*							generateCPPStyleExportDeclarationsForAllObjects( const char* pVersions );
 		const char*							generateCSharpStyleImportDeclarationsForAllObjects( const char* pVersions );
+		void								generateDInterfaceFiles( const char* pOutputFolder );
 		//--------------------------------------------------------------------
 
 		static BIND_INLINE Host*			getActiveHost()						{ return pActiveHost; }

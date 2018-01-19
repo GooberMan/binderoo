@@ -117,6 +117,7 @@ namespace binderoo
 	typedef void					( BIND_C_CALL *DestroyObjectByNamePtr )							( DString, void* pObject );
 	typedef void					( BIND_C_CALL *DestroyObjectByHashPtr )							( uint64_t, void* pObject );
 	typedef const char*				( BIND_C_CALL *GenerateDeclarationsForAllObjectsPtr )			( UnalignedAllocatorFunc allocator, const char* pVersion );
+	typedef void					( BIND_C_CALL *GenerateDInterfaceFilesPtr )						( const char* pOutputFolder );
 	//------------------------------------------------------------------------
 
 	#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
@@ -191,6 +192,7 @@ namespace binderoo
 		DestroyObjectByHashPtr							destroyObjectByHash;
 		GenerateDeclarationsForAllObjectsPtr			generateCPPStyleExportDeclarationsForAllObjects;
 		GenerateDeclarationsForAllObjectsPtr			generateCSharpStyleImportDeclarationsForAllObjects;
+		GenerateDInterfaceFilesPtr						generateDInterfaceFiles;
 	};
 	//------------------------------------------------------------------------
 
@@ -312,6 +314,7 @@ namespace binderoo
 
 		const char*					generateCPPStyleExportDeclarationsForAllObjects( const char* pVersions );
 		const char*					generateCSharpStyleImportDeclarationsForAllObjects( const char* pVersions );
+		void						generateDInterfaceFiles( const char* pOutputFolder );
 		//--------------------------------------------------------------------
 
 	private:
@@ -441,6 +444,13 @@ const char* binderoo::Host::generateCSharpStyleImportDeclarationsForAllObjects( 
 {
 	return pImplementation->generateCSharpStyleImportDeclarationsForAllObjects( pVersions );
 }
+//----------------------------------------------------------------------------
+
+void binderoo::Host::generateDInterfaceFiles( const char* pOutputFolder )
+{
+	pImplementation->generateDInterfaceFiles( pOutputFolder );
+}
+//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
 // HostImplementation
@@ -950,8 +960,9 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 		DestroyObjectByHashPtr		destroyObjectByHash				= ( DestroyObjectByHashPtr )GetModuleSymbolAddress( hModule, "destroyObjectByHash" );
 		GenerateDeclarationsForAllObjectsPtr generateCPPStyleExportDeclarationsForAllObjects = ( GenerateDeclarationsForAllObjectsPtr )GetModuleSymbolAddress( hModule, "generateCPPStyleExportDeclarationsForAllObjects" );
 		GenerateDeclarationsForAllObjectsPtr generateCSharpStyleImportDeclarationsForAllObjects = ( GenerateDeclarationsForAllObjectsPtr )GetModuleSymbolAddress( hModule, "generateCSharpStyleImportDeclarationsForAllObjects" );
+		GenerateDInterfaceFilesPtr	generateDInterfaceFiles			= ( GenerateDInterfaceFilesPtr )GetModuleSymbolAddress( hModule, "generateDInterfaceFiles" );
 
-		if( binderoo_startup && binderoo_shutdown && importFunctionsFrom && getExportedObjects && getExportedFunctions && createObjectByName && createObjectByHash && destroyObjectByName && destroyObjectByHash && generateCPPStyleExportDeclarationsForAllObjects )
+		if( binderoo_startup && binderoo_shutdown && importFunctionsFrom && getExportedObjects && getExportedFunctions && createObjectByName && createObjectByHash && destroyObjectByName && destroyObjectByHash && generateCPPStyleExportDeclarationsForAllObjects && generateDInterfaceFiles )
 		{
 			lib.binderoo_startup									= binderoo_startup;
 			lib.binderoo_shutdown									= binderoo_shutdown;
@@ -964,6 +975,7 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 			lib.destroyObjectByHash									= destroyObjectByHash;
 			lib.generateCPPStyleExportDeclarationsForAllObjects		= generateCPPStyleExportDeclarationsForAllObjects;
 			lib.generateCSharpStyleImportDeclarationsForAllObjects	= generateCSharpStyleImportDeclarationsForAllObjects;
+			lib.generateDInterfaceFiles								= generateDInterfaceFiles;
 			lib.eStatus												= DynamicLibStatus::Ready;
 
 			lib.binderoo_startup();
@@ -989,16 +1001,17 @@ void binderoo::HostImplementation::unloadDynamicLibrary( binderoo::HostDynamicLi
 		lib.binderoo_shutdown();
 	}
 
-	lib.binderoo_startup											= nullptr;
-	lib.binderoo_shutdown											= nullptr;
-	lib.importFunctionsFrom											= nullptr;
-	lib.getExportedObjects											= nullptr;
-	lib.getExportedFunctions										= nullptr;
-	lib.createObjectByName											= nullptr;
-	lib.createObjectByHash											= nullptr;
-	lib.destroyObjectByName											= nullptr;
-	lib.destroyObjectByHash											= nullptr;
-	lib.generateCPPStyleExportDeclarationsForAllObjects			= nullptr;
+	lib.binderoo_startup									= nullptr;
+	lib.binderoo_shutdown									= nullptr;
+	lib.importFunctionsFrom									= nullptr;
+	lib.getExportedObjects									= nullptr;
+	lib.getExportedFunctions								= nullptr;
+	lib.createObjectByName									= nullptr;
+	lib.createObjectByHash									= nullptr;
+	lib.destroyObjectByName									= nullptr;
+	lib.destroyObjectByHash									= nullptr;
+	lib.generateCPPStyleExportDeclarationsForAllObjects		= nullptr;
+	lib.generateCSharpStyleImportDeclarationsForAllObjects	= nullptr;
 
 #if BINDEROOHOST_RAPIDITERATION
 	HANDLE hProcess = GetCurrentProcess();
@@ -1332,6 +1345,15 @@ const char* binderoo::HostImplementation::generateCSharpStyleImportDeclarationsF
 
 	return pOutput;
 
+}
+//----------------------------------------------------------------------------
+
+void binderoo::HostImplementation::generateDInterfaceFiles( const char* pOutputFolder )
+{
+	for( auto& lib : vecDynamicLibs )
+	{
+		lib.generateDInterfaceFiles( pOutputFolder );
+	}
 }
 //----------------------------------------------------------------------------
 
