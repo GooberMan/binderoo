@@ -96,6 +96,10 @@ namespace binderoo
 
 		DString					strFunctionName;
 		DString					strFunctionSignature;
+		DString					strParameterNames;
+		DString					strCPrototype;
+		DString					strDPrototype;
+		DString					strCSharpPrototype;
 		DString					strOwningClass;
 		DString					strRequiredInclude;
 		Slice< DString >		strIncludeVersions;
