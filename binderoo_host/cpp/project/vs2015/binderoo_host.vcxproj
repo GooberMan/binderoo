@@ -80,6 +80,7 @@
     <ClCompile Include="..\..\..\..\binderoo_common\cpp\src\binderoo\sharedevent.cpp" />
     <ClCompile Include="..\..\src\binderoo\exports.cpp" />
     <ClCompile Include="..\..\src\binderoo\host.cpp" />
+    <ClCompile Include="..\..\src\binderoo\imports.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\..\binderoo_common\cpp\interface\binderoo\allocator.h" />
@@ -95,6 +96,7 @@
     <ClInclude Include="..\..\interface\binderoo\boundobject.h" />
     <ClInclude Include="..\..\interface\binderoo\exports.h" />
     <ClInclude Include="..\..\interface\binderoo\host.h" />
+    <ClInclude Include="..\..\interface\binderoo\host_c_api.h" />
     <ClInclude Include="..\..\interface\binderoo\imports.h" />
   </ItemGroup>
   <ItemGroup>

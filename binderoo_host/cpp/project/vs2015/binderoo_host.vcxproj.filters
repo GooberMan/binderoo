@@ -51,6 +51,9 @@
     <ClCompile Include="..\..\..\..\binderoo_common\cpp\src\binderoo\sharedevent.cpp">
       <Filter>common\src\binderoo</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\binderoo\imports.cpp">
+      <Filter>host\src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\..\binderoo_common\cpp\interface\binderoo\allocator.h">
@@ -94,6 +97,9 @@
     </ClInclude>
     <ClInclude Include="..\..\..\..\binderoo_common\cpp\src\binderoo\sharedevent.h">
       <Filter>common\src\binderoo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\interface\binderoo\host_c_api.h">
+      <Filter>host\interface\binderoo</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

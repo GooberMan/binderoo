@@ -1,4 +1,13 @@
-cmake_minimum_required( VERSION 3.5.1 )
+set( CMAKE_C_COMPILER, "clang" )
+set( CMAKE_CXX_COMPILER, "clang++" )
+set( CMAKE_D_COMPILER, "ldc2" )
+
+set( CMAKE_CXX_STANDARD 14 )
+set( CMAKE_CXX_STANDARD_REQUIRED ON )
+set( CMAKE_CXX_EXTENSIONS OFF )
+
+cmake_minimum_required( VERSION 3.5.0 )
+
 project( binderoo_host )
 
 # Hack from https://stackoverflow.com/questions/11944060/how-to-detect-target-architecture-using-cmake
@@ -33,4 +42,4 @@ set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BINDEROO_BINARY_DIRECTORY} )
 
 link_directories( ${BINDEROO_BINARY_DIRECTORY} )
 
-add_library( binderoo_host STATIC ${BINDEROO_COMMON_SOURCE} ${BINDEROO_HOST_SOURCE} )
+add_library( binderoo_host SHARED ${BINDEROO_COMMON_SOURCE} ${BINDEROO_HOST_SOURCE} )
