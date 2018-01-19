@@ -53,6 +53,7 @@ struct BoundFunction
 		Undefined,
 		C,
 		CPP,
+		D
 	}
 
 	@CTypeName( "binderoo::BoundFunction::FunctionKind", "binderoo/boundfunction.h" )
@@ -85,6 +86,10 @@ struct BoundFunction
 
 	DString					strFunctionName;
 	DString					strFunctionSignature;
+	DString					strParameterNames;
+	DString					strCPrototype;
+	DString					strDPrototype;
+	DString					strCSharpPrototype;
 	DString					strOwningClass;
 	DString					strRequiredInclude;
 	Slice!( DString )		strIncludeVersions;
