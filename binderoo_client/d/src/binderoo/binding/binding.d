@@ -34,6 +34,7 @@ public import binderoo.binding.attributes;
 public import binderoo.binding.functionstub;
 public import binderoo.binding.boundfunction;
 public import binderoo.binding.boundobject;
+public import binderoo.binding.boundmodule;
 
 public import binderoo.functiondescriptor;
 public import binderoo.variabledescriptor;
@@ -57,13 +58,22 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 
 	static void initialiseModuleBinding()
 	{
-		functionsToImport = generateImports!( Type )();
-		functionsToExport = generateExports!( Type )();
-		objectsToExport = generateObjects!( Type )();
+		string thisModuleName = ModuleName!initialiseModuleBinding;
 
-		registerImportFunctions( functionsToImport );
-		registerExportedFunctions( functionsToExport );
-		registerExportedObjects( objectsToExport );
+		BoundModule currModule = { thisModuleName, thisModuleName.fnv1a_64() };
+		auto theseFunctionsToImport = generateImports!( Type )();
+		auto theseFunctionsToExport = generateExports!( Type )();
+		auto theseObjectsToExport = generateObjects!( Type )();
+
+		registerModule( currModule );
+		registerImportFunctions( theseFunctionsToImport );
+		registerExportedFunctions( theseFunctionsToExport );
+		registerExportedObjects( theseObjectsToExport );
+
+		thisModule = currModule;
+		functionsToImport = theseFunctionsToImport;
+		functionsToExport = theseFunctionsToExport;
+		objectsToExport = theseObjectsToExport;
 	}
 	//------------------------------------------------------------------------
 
@@ -76,17 +86,22 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 
 	void initialiseModuleBinding()
 	{
-//		import std.stdio : writeln;
-//		writeln( "Initialising ", moduleName!(initialiseModuleBinding), " bindings..." );
+		string thisModuleName = ModuleName!initialiseModuleBinding;
 
+//		import std.stdio : writeln;
+//		writeln( "Initialising ", ThisModuleName, " bindings..." );
+
+		BoundModule currModule = { thisModuleName, thisModuleName.fnv1a_64() };
 		auto theseFunctionsToImport = generateImports();
 		auto theseFunctionsToExport = generateExports();
 		auto theseObjectsToExport = generateObjects();
 
+		registerModule( currModule );
 		registerImportFunctions( theseFunctionsToImport );
 		registerExportedFunctions( theseFunctionsToExport );
 		registerExportedObjects( theseObjectsToExport );
 
+		thisModule = currModule;
 		functionsToImport = theseFunctionsToImport;
 		functionsToExport = theseFunctionsToExport;
 		objectsToExport = theseObjectsToExport;
@@ -113,6 +128,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 	private:
 
+	__gshared BoundModule 							thisModule;
 	__gshared BoundObject[]							objectsToExport;
 	__gshared BoundFunction[]						functionsToImport;
 	__gshared BoundFunction[]						functionsToExport;
@@ -388,6 +404,12 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 		}
 	}
 
+}
+//----------------------------------------------------------------------------
+
+public void registerModule( ref BoundModule thisModule )
+{
+	registeredModules ~= thisModule;
 }
 //----------------------------------------------------------------------------
 
@@ -975,8 +997,39 @@ export extern( C ) const(char)* generateCSharpStyleImportDeclarationsForAllObjec
 }
 //----------------------------------------------------------------------------
 
+export extern( C ) void generateDInterfaceFiles( const char* pOutputFolder )
+{
+	import core.stdc.string : strlen;
+	import std.string;
+	import std.algorithm;
+	import std.file;
+	import std.stdio : writeln;
+
+	string strPath =  (cast(string)pOutputFolder[ 0 .. strlen( pOutputFolder ) ] ).replace( "\\", "/" );
+	if( !strPath.endsWith( '/' ) )
+	{
+		strPath ~= '/';
+	}
+
+	writeln( "Outputting to ", strPath );
+
+	if( strPath[ 0 ] != '.' )
+	{
+
+	}
+
+	foreach( ref thisModule; registeredModules )
+	{
+		string[] foldersAndFiles = thisModule.Name.split( '.' );
+		string outputFile = strPath ~ foldersAndFiles.joinWith( "/" ) ~ ".di";
+		
+		writeln( "Should be generating for ", outputFile, "..." );
+	}
+}
+
 private:
 
+__gshared BoundModule[]								registeredModules;
 __gshared BoundFunction[][ BoundFunction.Hashes ]	importFunctions;
 __gshared BoundFunction[]							exportFunctions;
 __gshared size_t[ BoundFunction.Hashes ]			exportFunctionIndices;
