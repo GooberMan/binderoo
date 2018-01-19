@@ -161,6 +161,7 @@ version = MSVCInheritance;
 
 struct FoundMethod
 {
+	string[]		RequiredModules;
 	string			DPrototypeDecl;
 	string			DCallWithParams;
 	string			DDeclForFnPointerSetup;
@@ -318,21 +319,22 @@ FoundMethod Rewrite( alias Function, SuperType, ThisType, BaseType )( size_t iFu
 		}
 
 
-		import std.traits		: ParameterIdentifierTuple
-								, ParameterTypeTuple
-								, ParameterStorageClassTuple
-								, ParameterStorageClass
-								, ReturnType;
+		import std.traits			: ParameterIdentifierTuple
+									, ParameterTypeTuple
+									, ParameterStorageClassTuple
+									, ParameterStorageClass
+									, ReturnType;
 
-		alias ParamTypes		= ParameterTypeTuple!Function;
-		alias ParamNames		= ParameterIdentifierTuple!Function;
-		alias ParamStorages		= ParameterStorageClassTuple!Function;
-		alias ParamReturnType	= ReturnType!Function;
+		alias ParamTypes			= ParameterTypeTuple!Function;
+		alias ParamNames			= ParameterIdentifierTuple!Function;
+		alias ParamStorages			= ParameterStorageClassTuple!Function;
+		alias ParamReturnType		= ReturnType!Function;
 
-		enum FunctionAttribs	= GetAttribs();
-		enum DReturnsRef		= FunctionAttribs & Attributes.Ref ? "ref" : "";
-		enum CReturnsRef		= FunctionAttribs & Attributes.Ref ? "&" : "";
-		enum FunctionIsConst	= FunctionAttribs & Attributes.Const ? " const" : "";
+		enum FunctionAttribs		= GetAttribs();
+		enum DReturnsRef			= FunctionAttribs & Attributes.Ref ? "ref" : "";
+		enum CReturnsRef			= FunctionAttribs & Attributes.Ref ? "&" : "";
+		enum FunctionIsConst		= FunctionAttribs & Attributes.Const ? " const" : "";
+		enum FunctionProtection		= ""; //__traits( getProtection, Function ) ~ " ";
 
 		string storageToString( uint eClass )
 		{
@@ -359,6 +361,8 @@ FoundMethod Rewrite( alias Function, SuperType, ThisType, BaseType )( size_t iFu
 		string[] strCTypes;
 		string[] strDImports;
 
+		method.RequiredModules ~= ModuleName!SuperType;
+
 		strDImports ~= "import " ~ ModuleName!SuperType ~ ";";
 
 		static if( !is( ParentType == void ) && !( FunctionAttribs & Attributes.Static ) )
@@ -381,7 +385,9 @@ FoundMethod Rewrite( alias Function, SuperType, ThisType, BaseType )( size_t iFu
 			static if( IsUserType!( Unqualified!( Type ) ) )
 			{
 				// TODO: MAKE THIS LESS RUBBISH
-				strDImports ~= "import " ~ ModuleName!( Unqualified!( binderoo.traits.PointerTarget!Type ) ) ~ ";";
+				enum ThisRequiredModule = ModuleName!( Unqualified!( binderoo.traits.PointerTarget!Type ) );
+				method.RequiredModules ~= ThisRequiredModule;
+				strDImports ~= "import " ~ ThisRequiredModule ~ ";";
 			}
 		}
 	
@@ -391,7 +397,7 @@ FoundMethod Rewrite( alias Function, SuperType, ThisType, BaseType )( size_t iFu
 			strUDAs ~= UDA.stringof;
 		}
 
-		method.DPrototypeDecl = strUDAs.joinWith( "@", "", " " ) ~ " " ~ FunctionIsStatic ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " " ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ")" ~ FunctionIsConst;
+		method.DPrototypeDecl = strUDAs.joinWith( "@", "", " " ) ~ " " ~ FunctionProtection ~ FunctionIsStatic ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " " ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ")" ~ FunctionIsConst;
 		method.DCallWithParams = strDCallParams.joinWith( ", " );
 
 		static if( !( FunctionAttribs & Attributes.Static ) )
@@ -657,14 +663,108 @@ string GenerateMTable( FoundMethod[] NonVirtualMethods, FoundMethod[] StaticMeth
 }
 //----------------------------------------------------------------------------
 
+string GenerateStructInterface( ThisType )( AllFoundMethods methods )
+{
+	struct FoundVariable
+	{
+		string strTypeName;
+		string strVarName;
+		string strUDAs;
+		string strProtection;
+	}
+
+	string[] strLines;
+	
+	string strUDAs;
+
+	static foreach( UDA; __traits( getAttributes, ThisType ) )
+	{
+		strUDAs ~= "@" ~ UDA.stringof ~ " ";
+	}
+
+	FoundVariable[] variables;
+	foreach( iIndex, member; ThisType.init.tupleof )
+	{
+		alias VarType = typeof( ThisType.tupleof[ iIndex ] );
+		FoundVariable thisVar;
+		thisVar.strTypeName = VarType.stringof;
+		thisVar.strVarName = __traits( identifier, ThisType.tupleof[ iIndex ] );
+		foreach( UDA; __traits( getAttributes, __traits( getMember, ThisType, __traits( identifier, ThisType.tupleof[ iIndex ] ) ) ) )
+		{
+			thisVar.strUDAs ~= "@" ~ UDA.stringof ~ " ";
+		}
+		thisVar.strProtection = __traits( getProtection, __traits( getMember, ThisType, __traits( identifier, ThisType.tupleof[ iIndex ] ) ) );
+		variables ~= thisVar;
+	}
+
+	if( strUDAs.length > 0 )
+	{
+		strLines ~= strUDAs;
+	}
+	strLines ~= "struct " ~ ThisType.stringof;
+	strLines ~= "{";
+
+	if( methods.virtualMembers.length > 0 )
+	{
+		strLines ~= "\t// Virtual methods";
+		foreach( ref thisMethod; methods.virtualMembers )
+		{
+			strLines ~= "\t" ~ thisMethod.DPrototypeDecl ~ ";";
+		}
+		strLines ~= "";
+	}
+
+	if( methods.nonVirtualMembers.length > 0 )
+	{
+		strLines ~= "\t// Non-virtual methods";
+		foreach( ref thisMethod; methods.nonVirtualMembers )
+		{
+			strLines ~= "\t" ~ thisMethod.DPrototypeDecl ~ ";";
+		}
+		strLines ~= "";
+	}
+
+	if( methods.staticMembers.length > 0 )
+	{
+		strLines ~= "\t// Static methods";
+		foreach( ref thisMethod; methods.staticMembers )
+		{
+			strLines ~= "\t" ~ thisMethod.DPrototypeDecl ~ ";";
+		}
+		strLines ~= "";
+	}
+
+	if( variables.length > 0 )
+	{
+		strLines ~= "\t// Variables";
+		foreach( ref thisVar; variables )
+		{
+			strLines ~= "\t" ~ thisVar.strUDAs ~ thisVar.strProtection ~ " " ~ thisVar.strTypeName ~ " " ~ thisVar.strVarName ~ ";";
+			if( thisVar.strVarName == "base" )
+			{
+				strLines ~= "\talias base this;";
+			}
+		}
+	}
+
+	strLines ~= "}";
+
+	return strLines.joinWith( "\n" );
+}
+//----------------------------------------------------------------------------
+
 string GenerateStructContents( InheritanceStructType StructType, ThisType, BaseType )()
 {
+	static assert( is( ThisType == struct ), StructType.stringof ~ " is not a struct. Binderoo only works on struct types.");
 	static assert( StructType != InheritanceStructType.CPP || HasUDA!( ThisType, CTypeName ), ThisType.stringof ~ " is a C++ object but has no @CTypeName UDA defined." );
 	enum AllMethods = FindAllMethods!( ThisType, ThisType, BaseType )( );
+	enum Interface = GenerateStructInterface!( ThisType )( AllMethods );
 
-	return	GenerateVTable( AllMethods.virtualMembers, ThisType.OriginatesVTable, ThisType.CanConstructVTable )
+	import std.array : replace;
+
+	return	"\tenum DInferfaceText = \"" ~ Interface.replace( "\"", "\\\"" ) ~ "\";\n\n"
+			~ GenerateVTable( AllMethods.virtualMembers, ThisType.OriginatesVTable, ThisType.CanConstructVTable )
 			~ GenerateMTable( AllMethods.nonVirtualMembers, AllMethods.staticMembers );
-
 }
 //----------------------------------------------------------------------------
 

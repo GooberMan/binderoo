@@ -60,7 +60,7 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 	{
 		string thisModuleName = ModuleName!initialiseModuleBinding;
 
-		BoundModule currModule = { thisModuleName, thisModuleName.fnv1a_64() };
+		auto currModule = generateModuleInfo();
 		auto theseFunctionsToImport = generateImports!( Type )();
 		auto theseFunctionsToExport = generateExports!( Type )();
 		auto theseObjectsToExport = generateObjects!( Type )();
@@ -86,12 +86,10 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 
 	void initialiseModuleBinding()
 	{
-		string thisModuleName = ModuleName!initialiseModuleBinding;
-
 //		import std.stdio : writeln;
 //		writeln( "Initialising ", ThisModuleName, " bindings..." );
 
-		BoundModule currModule = { thisModuleName, thisModuleName.fnv1a_64() };
+		auto currModule = generateModuleInfo();
 		auto theseFunctionsToImport = generateImports();
 		auto theseFunctionsToExport = generateExports();
 		auto theseObjectsToExport = generateObjects();
@@ -174,6 +172,42 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 	}
 	//------------------------------------------------------------------------
 
+	BoundModule generateModuleInfo( ObjectTypes... )()
+	{
+		DString[] gatherFor( Types... )()
+		{
+			DString[] interfaceStrings;
+
+			static foreach( CurrType; Types )
+			{
+				static if( __traits( hasMember, CurrType, "DInferfaceText" ) )
+				{
+					interfaceStrings ~= DString( CurrType.DInferfaceText );
+				}
+			}
+
+			return interfaceStrings;
+		}
+
+		string thisModuleName = ModuleName!functionsToImport;
+
+		BoundModule currModule = { thisModuleName, cast(DString[])( [ ] ), thisModuleName.fnv1a_64() };
+
+		static if( ObjectTypes.length == 0 )
+		{
+			alias ModuleTypes = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
+		}
+		else
+		{
+			alias ModuleTypes = ModuleTypeDescriptors!( void, ObjectTypes[ 0 ].stringof );
+		}
+
+		currModule.strDInterfaceDecls = Slice!DString( gatherFor!ModuleTypes );
+
+		return currModule;
+	}
+	//------------------------------------------------------------------------
+
 	BoundObject[] generateObjects( ObjectTypes... )()
 	{
 		BoundObject[] gatherFor( bool bRecursive, Types... )()
@@ -204,8 +238,6 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 			return objects;
 		}
-
-		mixin( "import " ~ ModuleName!( functionsToImport ) ~ ";" );
 
 		static if( ObjectTypes.length == 0 )
 		{
@@ -322,8 +354,6 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			return imports;
 		}
 
-		mixin( "import " ~ ModuleName!( generateObjects ) ~ ";" );
-
 		static if( ImportTypes.length == 0 )
 		{
 			alias Types = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
@@ -393,7 +423,6 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			return foundExports;
 		}
 
-		mixin( "import " ~ ModuleName!( functionsToImport ) ~ ";" );
 		static if( ExportTypes.length == 0 )
 		{
 			return functionGrabber!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
@@ -666,7 +695,6 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 	import std.stdio : writeln;
 	import std.array : split;
 
-
 	class CSharpObject
 	{
 		enum Type : int
@@ -746,7 +774,6 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string[] lines;
 
 		string strObjTabs = generateTabs( depth );
-		string strContentTabs = strObjTabs ~ '\t';
 
 		final switch( obj.eType ) with( CSharpObject.Type )
 		{
@@ -798,13 +825,12 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string strFuncFullName = cast(string)currFunction.strFunctionName;
 
 		string[] strFuncSplitNames = strFuncFullName.split( '.' );
-		string strFuncFullNamespace = strFuncSplitNames[ 0 .. $ - 1 ].joinWith( "." );
 
 		CSharpObject currObj = root;
 
 		while( strFuncSplitNames.length > 2 )
 		{
-			CSharpObject* thisObj = strFuncSplitNames[ 0 ] in currObj.subTypes;
+			const( CSharpObject* ) thisObj = strFuncSplitNames[ 0 ] in currObj.subTypes;
 			if( thisObj is null )
 			{
 				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strFuncSplitNames[ 0 ], currObj );
@@ -815,7 +841,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			strFuncSplitNames = strFuncSplitNames[ 1 .. $ ];
 		}
 
-		CSharpObject* thisClass = strFuncSplitNames[ 0 ] in currObj.subTypes;
+		const( CSharpObject* ) thisClass = strFuncSplitNames[ 0 ] in currObj.subTypes;
 		if( thisClass is null )
 		{
 			currObj.subTypes[ strFuncSplitNames[ 0 ] ] = new CSharpObject( CSharpObject.Type.StaticClass, strFuncSplitNames[ 0 ], currObj );
@@ -831,6 +857,69 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 	}
 
 	return lines.joinWith( "\n" );
+}
+//----------------------------------------------------------------------------
+
+public void generateDInterfaceFiles( string strOutputFolder )
+{
+	import std.string : replace, split, endsWith;
+	import std.file : exists, mkdir;
+	import std.stdio : writeln, File;
+
+	enum Separator = "//----------------------------------------------------------------------------";
+	enum BlankLine = "";
+
+	string strPath =  strOutputFolder.replace( "\\", "/" );
+	if( !strPath.endsWith( '/' ) )
+	{
+		strPath ~= '/';
+	}
+
+	writeln( "Outputting to ", strPath );
+
+	if( !strPath.exists )
+	{
+		strPath.mkdir();
+	}
+
+	foreach( ref thisModule; registeredModules )
+	{
+		string[] modulesAndTypeName = thisModule.Name.split( '.' );
+
+		string outputPath = strPath;
+		foreach( iIndex; 0 .. modulesAndTypeName.length - 1 )
+		{
+			outputPath ~= modulesAndTypeName[ iIndex ];
+			if( !outputPath.exists )
+			{
+				outputPath.mkdir();
+			}
+			outputPath ~= "/";
+		}
+
+		string outputFileName = outputPath ~ modulesAndTypeName[ $ - 1 ] ~ ".di";
+
+		string[] lines;
+		lines ~= "// Binderoo generated interface. DO NOT MODIFY";
+		lines ~= BlankLine;
+		lines ~= "module " ~ thisModule.Name ~ ";";
+		lines ~= Separator;
+		lines ~= BlankLine;
+
+		foreach( interfaceText; thisModule.strDInterfaceDecls )
+		{
+			lines ~= cast(string)interfaceText;
+			lines ~= Separator;
+			lines ~= BlankLine;
+		}
+
+		File outputFile = File( outputFileName, "wb" );
+		outputFile.rawWrite( lines.joinWith( "\n" ) );
+		outputFile.close();
+
+		writeln( "Generated interface for module ", thisModule.Name, " (", outputFileName, ")" );
+	}
+
 }
 //----------------------------------------------------------------------------
 
@@ -1000,32 +1089,9 @@ export extern( C ) const(char)* generateCSharpStyleImportDeclarationsForAllObjec
 export extern( C ) void generateDInterfaceFiles( const char* pOutputFolder )
 {
 	import core.stdc.string : strlen;
-	import std.string;
-	import std.algorithm;
-	import std.file;
-	import std.stdio : writeln;
-
-	string strPath =  (cast(string)pOutputFolder[ 0 .. strlen( pOutputFolder ) ] ).replace( "\\", "/" );
-	if( !strPath.endsWith( '/' ) )
-	{
-		strPath ~= '/';
-	}
-
-	writeln( "Outputting to ", strPath );
-
-	if( strPath[ 0 ] != '.' )
-	{
-
-	}
-
-	foreach( ref thisModule; registeredModules )
-	{
-		string[] foldersAndFiles = thisModule.Name.split( '.' );
-		string outputFile = strPath ~ foldersAndFiles.joinWith( "/" ) ~ ".di";
-		
-		writeln( "Should be generating for ", outputFile, "..." );
-	}
+	generateDInterfaceFiles( cast(string)pOutputFolder[ 0 .. strlen( pOutputFolder ) ] );
 }
+//----------------------------------------------------------------------------
 
 private:
 

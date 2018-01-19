@@ -37,8 +37,9 @@ public import binderoo.typedescriptor;
 @CTypeName( "binderoo::BoundModule", "binderoo/boundmodule.h" )
 struct BoundModule
 {
-	DString 	strName;
-	ulong		uNameHash;
+	DString 		strName;
+	Slice!DString	strDInterfaceDecls;
+	ulong			uNameHash;
 
 	final @property Name() 						{ return cast(string)strName; }
 }
