@@ -43,6 +43,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <algorithm>
 
+#include <string.h>
+
 #if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
 	#include <Windows.h>
 
@@ -106,15 +108,15 @@ namespace binderoo
 	typedef Containers< AllocatorSpace::Host >::InternalString												InternalString;
 	typedef std::vector< InternalString, binderoo::Allocator< AllocatorSpace::Host, InternalString > >		InternalStringVector;
 
-	typedef void					( BIND_C_CALL *BinderooInitDeinitPtr )									( );
-	typedef void					( BIND_C_CALL *ImportFunctionsFromPtr )									( binderoo::Slice< binderoo::BoundFunction > functions );
-	typedef void					( BIND_C_CALL *GetExportedObjectsPtr )									( binderoo::Slice< binderoo::BoundObject >* pOutExportedObjects );
-	typedef void					( BIND_C_CALL *GetExportedFunctionsPtr )								( binderoo::Slice< binderoo::BoundFunction >* pOutExportedFunctions );
-	typedef void*					( BIND_C_CALL *CreateObjectByNamePtr )									( DString strName );
-	typedef void*					( BIND_C_CALL *CreateObjectByHashPtr )									( uint64_t uNameHash );
-	typedef void					( BIND_C_CALL *DestroyObjectByNamePtr )									( DString, void* pObject );
-	typedef void					( BIND_C_CALL *DestroyObjectByHashPtr )									( uint64_t, void* pObject );
-	typedef const char*				( BIND_C_CALL *GenerateBindingDeclarationsForAllObjectsPtr )			( UnalignedAllocatorFunc allocator, const char* pVersion );
+	typedef void					( BIND_C_CALL *BinderooInitDeinitPtr )							( );
+	typedef void					( BIND_C_CALL *ImportFunctionsFromPtr )							( binderoo::Slice< binderoo::BoundFunction > functions );
+	typedef void					( BIND_C_CALL *GetExportedObjectsPtr )							( binderoo::Slice< binderoo::BoundObject >* pOutExportedObjects );
+	typedef void					( BIND_C_CALL *GetExportedFunctionsPtr )						( binderoo::Slice< binderoo::BoundFunction >* pOutExportedFunctions );
+	typedef void*					( BIND_C_CALL *CreateObjectByNamePtr )							( DString strName );
+	typedef void*					( BIND_C_CALL *CreateObjectByHashPtr )							( uint64_t uNameHash );
+	typedef void					( BIND_C_CALL *DestroyObjectByNamePtr )							( DString, void* pObject );
+	typedef void					( BIND_C_CALL *DestroyObjectByHashPtr )							( uint64_t, void* pObject );
+	typedef const char*				( BIND_C_CALL *GenerateDeclarationsForAllObjectsPtr )			( UnalignedAllocatorFunc allocator, const char* pVersion );
 	//------------------------------------------------------------------------
 
 	#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
@@ -165,7 +167,7 @@ namespace binderoo
 			, createObjectByHash( nullptr )
 			, destroyObjectByName( nullptr )
 			, destroyObjectByHash( nullptr )
-			, generateCPPStyleBindingDeclarationsForAllObjects( nullptr )
+			, generateCPPStyleExportDeclarationsForAllObjects( nullptr )
 		{
 		}
 		//--------------------------------------------------------------------
@@ -187,7 +189,8 @@ namespace binderoo
 		CreateObjectByHashPtr							createObjectByHash;
 		DestroyObjectByNamePtr							destroyObjectByName;
 		DestroyObjectByHashPtr							destroyObjectByHash;
-		GenerateBindingDeclarationsForAllObjectsPtr		generateCPPStyleBindingDeclarationsForAllObjects;
+		GenerateDeclarationsForAllObjectsPtr			generateCPPStyleExportDeclarationsForAllObjects;
+		GenerateDeclarationsForAllObjectsPtr			generateCSharpStyleImportDeclarationsForAllObjects;
 	};
 	//------------------------------------------------------------------------
 
@@ -307,7 +310,8 @@ namespace binderoo
 		const HostBoundObject*		getImportedObjectDetails( const char* pName ) const;
 		//--------------------------------------------------------------------
 
-		const char*					generateCPPStyleBindingDeclarationsForAllObjects( const char* pVersions );
+		const char*					generateCPPStyleExportDeclarationsForAllObjects( const char* pVersions );
+		const char*					generateCSharpStyleImportDeclarationsForAllObjects( const char* pVersions );
 		//--------------------------------------------------------------------
 
 	private:
@@ -427,11 +431,16 @@ const binderoo::BoundFunction* binderoo::Host::getImportedFunctionDetails( const
 }
 //--------------------------------------------------------------------
 
-const char* binderoo::Host::generateCPPStyleBindingDeclarationsForAllObjects( const char* pVersions )
+const char* binderoo::Host::generateCPPStyleExportDeclarationsForAllObjects( const char* pVersions )
 {
-	return pImplementation->generateCPPStyleBindingDeclarationsForAllObjects( pVersions );
+	return pImplementation->generateCPPStyleExportDeclarationsForAllObjects( pVersions );
 }
 //----------------------------------------------------------------------------
+
+const char* binderoo::Host::generateCSharpStyleImportDeclarationsForAllObjects( const char* pVersions )
+{
+	return pImplementation->generateCSharpStyleImportDeclarationsForAllObjects( pVersions );
+}
 //----------------------------------------------------------------------------
 
 // HostImplementation
@@ -735,7 +744,7 @@ void binderoo::HostImplementation::collectDynamicLibraries()
 #endif
 	}
 
-	for( auto& libPath : vecFoundFiles )
+	for( InternalString& libPath : vecFoundFiles )
 	{
 		size_t uSlashIndex = libPath.find_last_of( '/' );
 		uSlashIndex = ( uSlashIndex == std::string::npos ? 0 : uSlashIndex );
@@ -939,11 +948,11 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 		CreateObjectByHashPtr		createObjectByHash				= ( CreateObjectByHashPtr )GetModuleSymbolAddress( hModule, "createObjectByHash" );
 		DestroyObjectByNamePtr		destroyObjectByName				= ( DestroyObjectByNamePtr )GetModuleSymbolAddress( hModule, "destroyObjectByName" );
 		DestroyObjectByHashPtr		destroyObjectByHash				= ( DestroyObjectByHashPtr )GetModuleSymbolAddress( hModule, "destroyObjectByHash" );
-		GenerateBindingDeclarationsForAllObjectsPtr generateCPPStyleBindingDeclarationsForAllObjects = ( GenerateBindingDeclarationsForAllObjectsPtr )GetModuleSymbolAddress( hModule, "generateCPPStyleBindingDeclarationsForAllObjects" );
+		GenerateDeclarationsForAllObjectsPtr generateCPPStyleExportDeclarationsForAllObjects = ( GenerateDeclarationsForAllObjectsPtr )GetModuleSymbolAddress( hModule, "generateCPPStyleExportDeclarationsForAllObjects" );
+		GenerateDeclarationsForAllObjectsPtr generateCSharpStyleImportDeclarationsForAllObjects = ( GenerateDeclarationsForAllObjectsPtr )GetModuleSymbolAddress( hModule, "generateCSharpStyleImportDeclarationsForAllObjects" );
 
-		if( binderoo_startup && binderoo_shutdown && importFunctionsFrom && getExportedObjects && getExportedFunctions && createObjectByName && createObjectByHash && destroyObjectByName && destroyObjectByHash && generateCPPStyleBindingDeclarationsForAllObjects )
+		if( binderoo_startup && binderoo_shutdown && importFunctionsFrom && getExportedObjects && getExportedFunctions && createObjectByName && createObjectByHash && destroyObjectByName && destroyObjectByHash && generateCPPStyleExportDeclarationsForAllObjects )
 		{
-			lib.eStatus												= DynamicLibStatus::Ready;
 			lib.binderoo_startup									= binderoo_startup;
 			lib.binderoo_shutdown									= binderoo_shutdown;
 			lib.importFunctionsFrom									= importFunctionsFrom;
@@ -953,7 +962,9 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 			lib.createObjectByHash									= createObjectByHash;
 			lib.destroyObjectByName									= destroyObjectByName;
 			lib.destroyObjectByHash									= destroyObjectByHash;
-			lib.generateCPPStyleBindingDeclarationsForAllObjects	= generateCPPStyleBindingDeclarationsForAllObjects;
+			lib.generateCPPStyleExportDeclarationsForAllObjects		= generateCPPStyleExportDeclarationsForAllObjects;
+			lib.generateCSharpStyleImportDeclarationsForAllObjects	= generateCSharpStyleImportDeclarationsForAllObjects;
+			lib.eStatus												= DynamicLibStatus::Ready;
 
 			lib.binderoo_startup();
 			lib.importFunctionsFrom( binderoo::Slice< binderoo::BoundFunction >( vecExportedFunctions.data(), vecExportedFunctions.size() ) );
@@ -987,7 +998,7 @@ void binderoo::HostImplementation::unloadDynamicLibrary( binderoo::HostDynamicLi
 	lib.createObjectByHash											= nullptr;
 	lib.destroyObjectByName											= nullptr;
 	lib.destroyObjectByHash											= nullptr;
-	lib.generateCPPStyleBindingDeclarationsForAllObjects			= nullptr;
+	lib.generateCPPStyleExportDeclarationsForAllObjects			= nullptr;
 
 #if BINDEROOHOST_RAPIDITERATION
 	HANDLE hProcess = GetCurrentProcess();
@@ -1068,7 +1079,7 @@ void binderoo::HostImplementation::registerImportedFunction( binderoo::ImportedB
 	if( pFunction )
 	{
 		pInstance->pObjectInstance		= (void*)pFunction->pObject->pFunction;
-		pInstance->pObjectDescriptor		= (void*)pFunction;
+		pInstance->pObjectDescriptor	= (void*)pFunction;
 	}
 
 	vecImportFunctionInstances.push_back( pInstance );
@@ -1168,7 +1179,7 @@ const binderoo::HostBoundObject* binderoo::HostImplementation::getImportedObject
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
-const char* binderoo::HostImplementation::generateCPPStyleBindingDeclarationsForAllObjects( const char* pVersions )
+const char* binderoo::HostImplementation::generateCPPStyleExportDeclarationsForAllObjects( const char* pVersions )
 {
 	InternalStringVector vecAllDeclarations;
 
@@ -1209,7 +1220,85 @@ const char* binderoo::HostImplementation::generateCPPStyleBindingDeclarationsFor
 
 	for( auto& lib : vecDynamicLibs )
 	{
-		const char* pDeclarations = lib.generateCPPStyleBindingDeclarationsForAllObjects( configuration.unaligned_alloc, pVersions );
+		const char* pDeclarations = lib.generateCPPStyleExportDeclarationsForAllObjects( configuration.unaligned_alloc, pVersions );
+
+		InternalString strDeclarations( pDeclarations, strlen( pDeclarations ) );
+		vecAllDeclarations.push_back( strDeclarations );
+		uRequiredSpace += strDeclarations.size();
+
+		configuration.unaligned_free( (void*)pDeclarations );
+	}
+
+	if( !vecAllDeclarations.empty() )
+	{
+		uRequiredSpace += ( vecAllDeclarations.size() - 1 ) * uSeparatorLength + 1;
+
+		pOutput = (char*)configuration.unaligned_alloc( uRequiredSpace );
+
+		char* pDest = pOutput;
+
+		for( auto& declarations : vecAllDeclarations )
+		{
+			if( pDest != pOutput )
+			{
+				memcpy( pDest, pSeparator, uSeparatorLength );
+				pDest += uSeparatorLength;
+			}
+
+			memcpy( pDest, declarations.c_str(), declarations.size() );
+			pDest += declarations.size();
+		}
+
+		*pDest = 0;
+	}
+
+	return pOutput;
+
+}
+//----------------------------------------------------------------------------
+
+const char* binderoo::HostImplementation::generateCSharpStyleImportDeclarationsForAllObjects( const char* pVersions )
+{
+	InternalStringVector vecAllDeclarations;
+
+/*	InternalStringVector vecVersions;
+
+	const char* pVersionCurr = pVersions;
+	const char* pVersionStart = pVersions;
+
+	while( pVersionCurr )
+	{
+		if( *pVersionCurr )
+		{
+			if( *pVersionCurr == ';' )
+			{
+				vecVersions.push_back( InternalString( pVersionStart, (size_t)( pVersionCurr - pVersionStart ) ) );
+				pVersionStart = ++pVersionCurr;
+			}
+			else
+			{
+				++pVersionCurr;
+			}
+		}
+		else
+		{
+			if( pVersionCurr != pVersionStart )
+			{
+				vecVersions.push_back( InternalString( pVersionStart, (size_t)( pVersionCurr - pVersionStart ) ) );
+			}
+			pVersionCurr = nullptr;
+		}
+	}*/
+
+	const char* const pSeparator = "\n\n";
+	const size_t uSeparatorLength = 2;
+
+	size_t uRequiredSpace = 0;
+	char* pOutput = nullptr;
+
+	for( auto& lib : vecDynamicLibs )
+	{
+		const char* pDeclarations = lib.generateCSharpStyleImportDeclarationsForAllObjects( configuration.unaligned_alloc, pVersions );
 
 		InternalString strDeclarations( pDeclarations, strlen( pDeclarations ) );
 		vecAllDeclarations.push_back( strDeclarations );
@@ -1271,6 +1360,138 @@ void binderoo::HostImplementation::logError( const char* pMessage )
 		configuration.log_error( pMessage );
 	}
 }
+//----------------------------------------------------------------------------
+
+static void* BIND_C_CALL host_c_unaligned_malloc( size_t objSize )
+{
+	return malloc( objSize );
+}
+//----------------------------------------------------------------------------
+
+static void BIND_C_CALL host_c_unaligned_free( void* pObj )
+{
+	free( pObj );
+}
+//----------------------------------------------------------------------------
+
+static void* BIND_C_CALL host_c_malloc( size_t objSize, size_t alignment )
+{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+	return _aligned_malloc( objSize, alignment );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	return aligned_alloc( alignment, objSize );
+#endif
+}
+//----------------------------------------------------------------------------
+
+static void BIND_C_CALL host_c_free( void* pObj )
+{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+	_aligned_free( pObj );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	free( pObj );
+#endif
+}
+//----------------------------------------------------------------------------
+
+static void* BIND_C_CALL host_c_calloc( size_t objCount, size_t objSize, size_t alignment )
+{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+	return _aligned_malloc( objCount * objSize, alignment );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	return aligned_alloc( alignment, objCount * objSize );
+#endif
+}
+//----------------------------------------------------------------------------
+
+static void* BIND_C_CALL host_c_realloc( void* pObj, size_t newObjSize, size_t alignment )
+{
+#if BIND_SYSAPI == BIND_SYSAPI_WINDOWS
+	return _aligned_realloc( pObj, newObjSize, alignment );
+#elif BIND_SYSAPI == BIND_SYSAPI_POSIX
+	// HOLY HELL THIS IS ENTIRELY UNSECURE GET A CORRECT SOLUTION ASAP
+	void* pNewObj = aligned_alloc( alignment, newObjSize );
+	memcpy( pNewObj, pObj, newObjSize );
+	free( pObj );
+	return pNewObj;
+#endif
+}
+//----------------------------------------------------------------------------
+
+static void BIND_C_CALL host_c_log_info( const char* pMessage )
+{
+	fprintf( stdout, "%s\n", pMessage );
+}
+//----------------------------------------------------------------------------
+
+static void BIND_C_CALL host_c_log_warning( const char* pMessage )
+{
+	fprintf( stdout, "WARNING: %s\n", pMessage );
+}
+//----------------------------------------------------------------------------
+
+static void BIND_C_CALL host_c_log_error( const char* pMessage )
+{
+	fprintf( stderr, "ERROR: %s\n", pMessage );
+}
+//----------------------------------------------------------------------------
+
+BIND_C_API_BEGIN
+
+typedef std::vector< std::string > StringVector;
+typedef std::vector< binderoo::DString > DStringVector;
+//----------------------------------------------------------------------------
+
+struct HostData_C
+{
+	StringVector					m_vecPathsNative;
+	DStringVector					m_vecPaths;
+	binderoo::HostConfiguration		m_config;
+	binderoo::Host*					m_pHost;
+};
+//----------------------------------------------------------------------------
+
+binderoo_host_t binderoo_host_create( char** pSearchPaths, int iNumSearchPaths, bool bStartInRapidIteration )
+{
+	HostData_C* pHostData = new HostData_C;
+
+	pHostData->m_vecPathsNative.resize( iNumSearchPaths );
+	pHostData->m_vecPaths.resize( iNumSearchPaths );
+
+	for( int iThisPath = 0; iThisPath < iNumSearchPaths; ++iThisPath )
+	{
+		pHostData->m_vecPathsNative[ iThisPath ] = std::string( pSearchPaths[ iThisPath ] );
+		pHostData->m_vecPaths[ iThisPath ] = binderoo::DString( pHostData->m_vecPathsNative[ iThisPath ].data(), pHostData->m_vecPathsNative[ iThisPath ].length() );
+	}
+
+	pHostData->m_config.strDynamicLibSearchFolders = binderoo::Slice< binderoo::DString >( pHostData->m_vecPaths.data(), pHostData->m_vecPaths.size() );
+	pHostData->m_config.alloc = &host_c_malloc;
+	pHostData->m_config.free = &host_c_free;
+	pHostData->m_config.calloc = &host_c_calloc;
+	pHostData->m_config.realloc = &host_c_realloc;
+	pHostData->m_config.unaligned_alloc = &host_c_unaligned_malloc;
+	pHostData->m_config.unaligned_free = &host_c_unaligned_free;
+	pHostData->m_config.log_info = &host_c_log_info;
+	pHostData->m_config.log_warning = &host_c_log_warning;
+	pHostData->m_config.log_error = &host_c_log_error;
+	pHostData->m_config.bStartInRapidIterationMode = bStartInRapidIteration;
+
+	pHostData->m_pHost = new binderoo::Host( pHostData->m_config );
+
+	return pHostData;
+}
+//----------------------------------------------------------------------------
+
+void binderoo_host_destroy( binderoo_host_t* pHost )
+{
+	HostData_C* pHostData = (HostData_C*)pHost;
+	delete pHostData->m_pHost;
+	delete pHostData;
+
+}
+//----------------------------------------------------------------------------
+
+BIND_C_API_END
 //----------------------------------------------------------------------------
 
 //============================================================================

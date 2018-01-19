@@ -27,11 +27,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 //----------------------------------------------------------------------------
 
-#pragma once
+#if defined( __cplusplus )
+	#pragma once
+#endif
 
 #if !defined( _BINDEROO_IMPORTS_H_ )
 #define _BINDEROO_IMPORTS_H_
 //----------------------------------------------------------------------------
+
+#if !defined( BIND_HOST_C_API_ONLY )
 
 #include "binderoo/defs.h"
 
@@ -48,10 +52,11 @@ namespace binderoo
 	class ImportedBase
 	{
 	public:
-		BIND_INLINE ImportedBase( const char* pClassTypeName )
+		BIND_INLINE ImportedBase( const char* pSymbolName )
 			: pObjectInstance( nullptr )
 			, pObjectDescriptor( nullptr )
-			, pSymbol( pClassTypeName )
+			, pSymbol( pSymbolName )
+			, iRefCount( 0 )
 		{
 		}
 		//--------------------------------------------------------------------
@@ -60,16 +65,21 @@ namespace binderoo
 		friend class binderoo::HostImplementation;
 
 	protected:
-		BIND_INLINE ImportedBase( void* pInstance, void* pDescriptor, const char* pClassTypeName )
+		BIND_INLINE ImportedBase( void* pInstance, void* pDescriptor, const char* pClassTypeName, std::ptrdiff_t refcount )
 			: pObjectInstance( pInstance )
 			, pObjectDescriptor( pDescriptor )
 			, pSymbol( pClassTypeName )
+			, iRefCount( refcount )
 		{
 		}
+
+		template< typename _ty >
+		friend class RefCountedImportedClassInstance;
 
 		void*						pObjectInstance;
 		void*						pObjectDescriptor;
 		const char*					pSymbol;
+		std::ptrdiff_t				iRefCount;
 	};
 	//------------------------------------------------------------------------
 
@@ -82,7 +92,6 @@ namespace binderoo
 
 		BIND_INLINE ImportedClassInstance( const char* pClassName = NameProvider::getDName(), bool bInstantiate = false )
 			: ImportedBase( pClassName )
-			, iRefCount( 0 )
 		{
 			Host::getActiveHost()->registerImportedClassInstance( this );
 
@@ -98,8 +107,7 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		BIND_INLINE ImportedClassInstance( ImportedClassInstance&& otherInst )
-			: ImportedBase( otherInst.pObjectInstance, otherInst.pObjectDescriptor, otherInst.pSymbol )
-			, iRefCount( otherInst.iRefCount )
+			: ImportedBase( otherInst.pObjectInstance, otherInst.pObjectDescriptor, otherInst.pSymbol, otherInst.iRefCount )
 		{
 			otherInst.pObjectInstance = nullptr;
 			otherInst.pObjectDescriptor = nullptr;
@@ -138,7 +146,7 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-		BIND_INLINE _ty* const			operator->()								{ return getInternal(); }
+		BIND_INLINE _ty* const			operator->()							{ return getInternal(); }
 		BIND_INLINE const _ty* const	operator->() const						{ return getInternal(); }
 		BIND_INLINE						operator _ty* const ()					{ return getInternal(); }
 		BIND_INLINE						operator const _ty* const () const		{ return getInternal(); }
@@ -171,9 +179,6 @@ namespace binderoo
 			return (_ty* const)pObjectInstance;
 		}
 		//--------------------------------------------------------------------
-
-		friend class RefCountedImportedClassInstance< _ty >;
-		std::ptrdiff_t iRefCount;
 	};
 	//------------------------------------------------------------------------
 
@@ -245,7 +250,7 @@ namespace binderoo
 
 		BIND_INLINE bool				isAcquired() const						{ return pRefCountedInstance != nullptr; }
 		BIND_INLINE std::ptrdiff_t		getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount : 0; }
-		BIND_INLINE _ty* const			operator->()								{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
+		BIND_INLINE _ty* const			operator->()							{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE const _ty* const	operator->() const						{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE						operator _ty* const ()					{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE						operator const _ty* const () const		{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
@@ -284,7 +289,7 @@ namespace binderoo
 	};
 	//------------------------------------------------------------------------
 
-#if BIND_CPPVERSION == BIND_CPP11
+#if BIND_STANDARD != BIND_STANDARD_MSVC2012
 	template< typename _functiontraits >
 	class ImportedFunction : public ImportedBase
 	{
@@ -344,7 +349,7 @@ namespace binderoo
 	};
 	//------------------------------------------------------------------------
 
-#elif BIND_STANDARD == BIND_STANDARD_MSVC2012
+#else // BIND_STANDARD == BIND_STANDARD_MSVC2012
 	template< typename _functiontraits >
 	class ImportedFunction : public ImportedBase
 	{
@@ -398,9 +403,21 @@ namespace binderoo
 			return (typename ThisType::signature)pObjectInstance;
 		}
 	};
-#endif //BIND_CPPVERSION == BIND_CPP11
+#endif //BIND_STANDARD != BIND_STANDARD_MSVC2012
 
 }
+//----------------------------------------------------------------------------
+
+#endif // !defined( BIND_HOST_C_API_ONLY )
+
+BIND_C_API_BEGIN
+	typedef void* binderoo_imported_function_t;
+	typedef void* binderoo_func_ptr_t;
+
+	binderoo_imported_function_t	BIND_DLL binderoo_host_create_imported_function( char* pName, char* pSignature );
+	void							BIND_DLL binderoo_host_destroy_imported_function( binderoo_imported_function_t pFunc );
+	binderoo_func_ptr_t				BIND_DLL binderoo_host_get_function_ptr( binderoo_imported_function_t pFunc );
+BIND_C_API_END
 //----------------------------------------------------------------------------
 
 #endif // _BINDEROO_IMPORTS_H_

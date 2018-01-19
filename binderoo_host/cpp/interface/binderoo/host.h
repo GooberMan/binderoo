@@ -27,11 +27,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 //----------------------------------------------------------------------------
 
-#pragma once
+#if defined( __cplusplus )
+	#pragma once
+#endif
 
 #if !defined( _BINDEROO_HOST_H_ )
 #define _BINDEROO_HOST_H_
 //----------------------------------------------------------------------------
+
+#if !defined( BIND_HOST_C_API_ONLY )
 
 #include "binderoo/defs.h"
 #include "binderoo/slice.h"
@@ -53,7 +57,7 @@ namespace binderoo
 
 	typedef void( BIND_C_CALL * LogFunc )( const char* );
 
-	struct BIND_DLL HostConfiguration
+	struct HostConfiguration
 	{
 		Slice< DString >					strDynamicLibSearchFolders;
 
@@ -142,7 +146,8 @@ namespace binderoo
 
 		// Returns a string allocated with your unaligned_alloc function that represents
 		// the required #defines to bind a C++ object to the system
-		const char*							generateCPPStyleBindingDeclarationsForAllObjects( const char* pVersions );
+		const char*							generateCPPStyleExportDeclarationsForAllObjects( const char* pVersions );
+		const char*							generateCSharpStyleImportDeclarationsForAllObjects( const char* pVersions );
 		//--------------------------------------------------------------------
 
 		static BIND_INLINE Host*			getActiveHost()						{ return pActiveHost; }
@@ -163,6 +168,15 @@ namespace binderoo
 	//------------------------------------------------------------------------
 }
 //----------------------------------------------------------------------------
+
+#endif // BIND_HOST_C_API_ONLY
+
+BIND_C_API_BEGIN
+	typedef void* binderoo_host_t;
+
+	binderoo_host_t		BIND_DLL binderoo_host_create( char** pSearchPaths, int iNumSearchPaths, bool bStartInRapidIteration );
+	void				BIND_DLL binderoo_host_destroy( binderoo_host_t* pHost );
+BIND_C_API_END
 
 #endif // !defined( _BINDEROO_HOST_H_ )
 
