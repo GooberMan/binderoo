@@ -571,6 +571,7 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 
 	enum string				DDecl						= Linkage ~ DDeclNoLinkage;
 	enum string				CDecl						= generateFullyQualifiedName!( "CDecl" )();
+	enum string				CSharpDecl					= generateFullyQualifiedName!( "CSharpDecl" )();
 
 	enum string				DCall						= generateDCall();
 	//------------------------------------------------------------------------
@@ -584,6 +585,7 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 		package enum		DDecl						= TypeString!( BaseParam.Descriptor ).DDecl ~ " " ~ BaseParam.Name;
 		package enum		FullyQualifiedDDecl			= TypeString!( BaseParam.Descriptor ).FullyQualifiedDDecl ~ " " ~ BaseParam.Name;
 		package enum		CDecl						= TypeString!( BaseParam.Descriptor ).CDecl ~ ( BaseParam.Descriptor.IsClass ? "* " : " " ) ~ BaseParam.Name;
+		package enum		CSharpDecl					= TypeString!( BaseParam.Descriptor ).CSharpDecl ~ " " ~ BaseParam.Name;
 	}
 	//------------------------------------------------------------------------
 
