@@ -155,22 +155,52 @@ struct CTypeName
 }
 //----------------------------------------------------------------------------
 
+struct CSharpTypeName
+{
+	string name;
+	string namespace;
+	ulong hash;
+
+	@disable this();
+
+	this( string n )
+	{
+		import binderoo.hash;
+		name = n;
+		hash = fnv1a_64( name );
+	}
+
+	this( string n, string ns )
+	{
+		import binderoo.hash;
+		name = n;
+		namespace = ns;
+		hash = fnv1a_64( name );
+	}
+}
+//----------------------------------------------------------------------------
+
 // Dealing with a native type or library type? Stick this somewhere visible.
-enum CTypeNameUndefinedOverride			= "undefined";
-enum CTypeNameOverride( T )				= CTypeNameUndefinedOverride;
+enum TypeNameUndefined						= "undefined";
+enum CTypeNameOverride( T )					= TypeNameUndefined;
+enum CSharpTypeNameOverride( T )			= TypeNameUndefined;
 //----------------------------------------------------------------------------
 
 // Default overrides
-enum CTypeNameOverride( T : byte )		= "int8_t";
-enum CTypeNameOverride( T : ubyte )		= "uint8_t";
-enum CTypeNameOverride( T : short )		= "int16_t";
-enum CTypeNameOverride( T : ushort )	= "uint16_t";
-enum CTypeNameOverride( T : int )		= "int32_t";
-enum CTypeNameOverride( T : uint )		= "uint32_t";
-enum CTypeNameOverride( T : long )		= "int64_t";
-enum CTypeNameOverride( T : ulong )		= "uint64_t";
-enum CTypeNameOverride( T : wchar )		= "wchar_t";
-enum CTypeNameOverride( T : bool )		= "bool"; // Returns char otherwise when parsing functions? o_O
+enum CTypeNameOverride( T : byte )			= "int8_t";
+enum CTypeNameOverride( T : ubyte )			= "uint8_t";
+enum CTypeNameOverride( T : short )			= "int16_t";
+enum CTypeNameOverride( T : ushort )		= "uint16_t";
+enum CTypeNameOverride( T : int )			= "int32_t";
+enum CTypeNameOverride( T : uint )			= "uint32_t";
+enum CTypeNameOverride( T : long )			= "int64_t";
+enum CTypeNameOverride( T : ulong )			= "uint64_t";
+enum CTypeNameOverride( T : wchar )			= "wchar_t";
+enum CTypeNameOverride( T : bool )			= "bool"; // Returns char otherwise when parsing functions? o_O
+//----------------------------------------------------------------------------
+
+enum CSharpTypeNameOverride( T : char )		= "byte";
+enum CSharpTypeNameOverride( T : wchar ) 	= "char";
 //----------------------------------------------------------------------------
 
 template CTypeString( T )
@@ -217,7 +247,7 @@ template CTypeString( T )
 	{
 		enum CTypeString = "const " ~ CTypeString!( Unqual!( T ) );
 	}
-	else static if( CTypeNameOverride!( T ) != CTypeNameUndefinedOverride )
+	else static if( CTypeNameOverride!( T ) != TypeNameUndefined )
 	{
 		enum CTypeString = CTypeNameOverride!( T );
 	}
@@ -252,29 +282,69 @@ template CTypeString( ulong val )
 }
 //----------------------------------------------------------------------------
 
+template CSharpTypeString( T )
+{
+	static if( IsConst!( T ) || IsImmutable!( T ) )
+	{
+		enum CSharpTypeString = "const " ~ CSharpTypeString!( Unqual!( T ) );
+	}
+	else static if( CSharpTypeNameOverride!( T ) != TypeNameUndefined )
+	{
+		enum CSharpTypeString = CSharpTypeNameOverride!( T );
+	}
+	else static if( IsUserType!( T ) )
+	{
+		static if( HasUDA!( T, CSharpTypeName ) )
+		{
+			enum CSharpTypeString = GetUDA!( T, CSharpTypeName ).name;
+		}
+		else
+		{
+			enum CSharpTypeString = T.stringof;
+		}
+	}
+	else
+	{
+		enum CSharpTypeString = T.stringof;
+	}
+}
+
 struct TypeString( T, bool bIsRef = false )
 {
-	static private string typeStringD( string T )
+	static private string typeStringD( string TypeName )
 	{
-		return ( bIsRef ? "ref " : "" ) ~ T;
+		return ( bIsRef ? "ref " : "" ) ~ TypeName;
 	}
 
-	static private string typeStringC( string T )
+	static private string typeStringC( string TypeName )
 	{
-		return T ~ ( bIsRef ? "&" : "" );
+		return TypeName ~ ( bIsRef ? "&" : "" );
 	}
 
-	static private string unqualC( string T )
+	static private string unqualC( string TypeName )
 	{
 		import std.string;
 
-		auto found = T.lastIndexOf( ':' );
+		auto found = TypeName.lastIndexOf( ':' );
 
-		if( found > 0 && T[ found - 1 ] == ':' )
+		if( found > 0 && TypeName[ found - 1 ] == ':' )
 		{
-			return T[ found + 1 .. $ ];
+			return TypeName[ found + 1 .. $ ];
 		}
-		return T;
+		return TypeName;
+	}
+
+	static private string typeStringCSharp( )
+	{
+		static if( ( IsConst!( T ) || IsImmutable!( T ) )
+					&& bIsRef )
+		{
+			return "in " ~ CSharpTypeString!( Unqual!( T ) );
+		}
+		else
+		{
+			return ( bIsRef ? "ref " : "" ) ~ CSharpTypeString!( T );
+		}
 	}
 	//------------------------------------------------------------------------
 
@@ -282,6 +352,7 @@ struct TypeString( T, bool bIsRef = false )
 	enum			DDecl							= typeStringD( T.stringof );
 	enum			CDecl							= typeStringC( CTypeString!( T ) );
 	enum			UnqualifiedCDecl				= unqualC( typeStringC( CTypeString!( T ) ) );
+	enum			CSharpDecl						= typeStringCSharp( );
 }
 //----------------------------------------------------------------------------
 
