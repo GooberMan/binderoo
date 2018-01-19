@@ -71,7 +71,7 @@ mixin template CPPStructInherits( ThisBaseType, BeginsVirtual eBeginsVirtual = B
 	alias BaseType				= ThisBaseType;
 	alias HighestLevelCPPType	= typeof( this );
 
-	ThisBaseType base;
+	@InheritanceBase ThisBaseType base;
 	alias base this;
 
 	enum OriginatesVTable	= eBeginsVirtual == BeginsVirtual.Yes;
@@ -92,7 +92,7 @@ mixin template DStructInherits( ThisBaseType )
 	alias BaseType				= ThisBaseType;
 	alias HighestLevelCPPType	= BaseType.HighestLevelCPPType;
 
-	ThisBaseType base;
+	@InheritanceBase ThisBaseType base;
 	alias base this;
 
 	enum OriginatesVTable	= false;
@@ -103,6 +103,30 @@ mixin template DStructInherits( ThisBaseType )
 string GenerateBindings( ThisType )()
 {
 	return GenerateStructContents!( ThisType.StructType, ThisType, ThisType.BaseType );
+}
+//----------------------------------------------------------------------------
+
+template HasInheritedAnywhere( Type, BaseType ) if( is( Type == struct ) )
+{
+	static if( is( Type == BaseType ) )
+	{
+		enum HasInheritedAnywhere = true;
+	}
+	else static if( __traits( compiles, typeof( Type.base ) ) && HasUDA!( Type.base, InheritanceBase ) )
+	{
+		alias NextType = typeof( Type.base );
+		enum HasInheritedAnywhere = HasInheritedAnywhere!( NextType, BaseType );
+	}
+	else
+	{
+		enum HasInheritedAnywhere = false;
+	}
+}
+//----------------------------------------------------------------------------
+
+template HasInheritedAnywhere( Type, BaseType ) if( !is( Type == struct ) )
+{
+	enum HasInheritedAnywhere = false;
 }
 //----------------------------------------------------------------------------
 
@@ -124,6 +148,9 @@ else
 }
 //----------------------------------------------------------------------------
 
+struct InheritanceBase { }
+//----------------------------------------------------------------------------
+
 private:
 
 enum EndLine = "\n";
@@ -138,9 +165,7 @@ struct FoundMethod
 	string			DCallWithParams;
 	string			DDeclForFnPointerSetup;
 	string			DDeclForFnPointer;
-	string			DRawImportUDAs;
 	string			CExplicitCast;
-	string			CSignatureForMatching;
 	string			DVirtualOverrideCall;
 	string			DVirtualOverrideName;
 	bool			bUseDVirtualOverride = false;
@@ -168,247 +193,259 @@ template OverloadsOf( ThisType, alias thisMember )
 }
 //----------------------------------------------------------------------------
 
-AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
+FoundMethod Rewrite( alias Function, SuperType, ThisType, BaseType )( size_t iFuncIndex )
 {
-	FoundMethod Rewrite( alias Function )( size_t iFuncIndex )
+	static if( HasUDA!( Function, BindMethod ) )
 	{
-		static if( HasUDA!( Function, BindMethod ) )
-		{
-			enum FunctionName		= __traits( identifier, Function );
+		enum FunctionName		= __traits( identifier, Function );
 
-			alias VersionDetails	= GetUDA!( Function, BindMethod );
-			enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
-			enum MaxVersion			= VersionDetails.iMaxVersion;
-			enum RawImportType		= __traits( isStaticFunction, Function ) ? BindRawImport.FunctionKind.Static : BindRawImport.FunctionKind.Method;
-		}
-		else static if( HasUDA!( Function, BindConstructor ) )
-		{
-			enum FunctionName		= "cppConstructor";
+		alias VersionDetails	= GetUDA!( Function, BindMethod );
+		enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
+		enum MaxVersion			= VersionDetails.iMaxVersion;
+		enum RawImportType		= __traits( isStaticFunction, Function ) ? BindRawImport.FunctionKind.Static : BindRawImport.FunctionKind.Method;
+	}
+	else static if( HasUDA!( Function, BindConstructor ) && is( ThisType == SuperType.HighestLevelCPPType ) )
+	{
+		//pragma( msg, "SuperType " ~ SuperType.stringof ~ " encountering CPP constructor " ~ __traits( identifier, Function ) ~ " in type " ~ ThisType.stringof );
+//			enum FunctionName		= "cppConstructor";
+		enum FunctionName		= __traits( identifier, Function );
 
-			alias VersionDetails	= GetUDA!( Function, BindConstructor );
-			enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
-			enum MaxVersion			= VersionDetails.iMaxVersion;
-			enum RawImportType		= BindRawImport.FunctionKind.Constructor;
-		}
-		else static if( HasUDA!( Function, BindDestructor ) )
-		{
-			enum FunctionName		= "cppDestructor";
+		alias VersionDetails	= GetUDA!( Function, BindConstructor );
+		enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
+		enum MaxVersion			= VersionDetails.iMaxVersion;
+		enum RawImportType		= BindRawImport.FunctionKind.Constructor;
+	}
+	else static if( HasUDA!( Function, BindDestructor ) && is( ThisType == SuperType.HighestLevelCPPType ) )
+	{
+//			enum FunctionName		= "cppDestructor";
+		enum FunctionName		= __traits( identifier, Function );
 
-			alias VersionDetails	= GetUDA!( Function, BindDestructor );
-			enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
-			enum MaxVersion			= VersionDetails.iMaxVersion;
-			enum RawImportType		= BindRawImport.FunctionKind.Destructor;
-		}
-		else static if( HasUDA!( Function, BindVirtual ) )
-		{
-			enum FunctionName		= __traits( identifier, Function );
+		alias VersionDetails	= GetUDA!( Function, BindDestructor );
+		enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
+		enum MaxVersion			= VersionDetails.iMaxVersion;
+		enum RawImportType		= BindRawImport.FunctionKind.Destructor;
+	}
+	else static if( HasUDA!( Function, BindVirtual ) )
+	{
+		enum FunctionName		= __traits( identifier, Function );
 
-			alias VersionDetails	= GetUDA!( Function, BindVirtual );
-			enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
-			enum MaxVersion			= VersionDetails.iMaxVersion;
-			enum RawImportType		= BindRawImport.FunctionKind.Virtual;
-		}
-		else static if( HasUDA!( Function, BindVirtualDestructor ) )
-		{
-			enum FunctionName		= "cppDestructor";
+		alias VersionDetails	= GetUDA!( Function, BindVirtual );
+		enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
+		enum MaxVersion			= VersionDetails.iMaxVersion;
+		enum RawImportType		= BindRawImport.FunctionKind.Virtual;
+	}
+	else static if( HasUDA!( Function, BindVirtualDestructor ) )
+	{
+//			enum FunctionName		= "cppDestructor";
+		enum FunctionName		= __traits( identifier, Function );
 
-			alias VersionDetails	= GetUDA!( Function, BindVirtualDestructor );
-			enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
-			enum MaxVersion			= VersionDetails.iMaxVersion;
-			enum RawImportType		= BindRawImport.FunctionKind.VirtualDestructor;
+		alias VersionDetails	= GetUDA!( Function, BindVirtualDestructor );
+		enum IntroducedVersion	= VersionDetails.iIntroducedVersion;
+		enum MaxVersion			= VersionDetails.iMaxVersion;
+		enum RawImportType		= BindRawImport.FunctionKind.VirtualDestructor;
+	}
+	else
+	{
+		enum FunctionName		= __traits( identifier, Function );
+		alias VersionDetails	= void;
+		enum IntroducedVersion	= -1;
+		enum MaxVersion			= -1;
+		enum RawImportType		= BindRawImport.FunctionKind.Invalid;
+	}
+
+	FoundMethod method;
+
+	static if( !is( VersionDetails == void ) )
+	{
+		static if( __traits( compiles, __traits( parent, Function ).init ) )
+		{
+			alias ParentType = typeof( __traits( parent, Function ).init );
+			enum FunctionIsStatic = __traits( isStaticFunction, Function ) ? "static " : "";
 		}
 		else
 		{
-			enum FunctionName		= __traits( identifier, Function );
-			alias VersionDetails	= void;
-			enum IntroducedVersion	= -1;
-			enum MaxVersion			= -1;
-			enum RawImportType		= BindRawImport.FunctionKind.Invalid;
+			alias ParentType = void;
+			enum FunctionIsStatic = __traits( isStaticFunction, Function ) ? "static " : "";
 		}
 
-		FoundMethod method;
-
-		static if( !is( VersionDetails == void ) )
+		enum Attributes
 		{
-			static if( __traits( compiles, __traits( parent, Function ).init ) )
-			{
-				alias ParentType = typeof( __traits( parent, Function ).init );
-				enum FunctionIsStatic = __traits( isStaticFunction, Function ) ? "static " : "";
-			}
-			else
-			{
-				alias ParentType = void;
-				enum FunctionIsStatic = __traits( isStaticFunction, Function ) ? "static " : "";
-			}
+			None	= 0b000,
+			Const	= 0b001,
+			Ref		= 0b010,
+			Static	= 0b100,
+		}
 
-			enum Attributes
+		Attributes GetAttribs()
+		{
+			Attributes ret;
+			foreach( attr; __traits( getFunctionAttributes, Function ) )
 			{
-				None	= 0b000,
-				Const	= 0b001,
-				Ref		= 0b010,
-				Static	= 0b100,
-			}
-
-			Attributes GetAttribs()
-			{
-				Attributes ret;
-				foreach( attr; __traits( getFunctionAttributes, Function ) )
+				switch( attr ) with( Attributes )
 				{
-					switch( attr ) with( Attributes )
-					{
-					case "const":
-						ret |= Const;
-						break;
-					case "ref":
-						ret |= Ref;
-						break;
-					default:
-						break;
-					}
+				case "const":
+					ret |= Const;
+					break;
+				case "ref":
+					ret |= Ref;
+					break;
+				default:
+					break;
 				}
-
-				static if( __traits( isStaticFunction, Function ) ) ret |= Attributes.Static;
-
-				return ret;
 			}
 
-			static if( HasUDA!( SuperType, BindVersion ) )
+			static if( __traits( isStaticFunction, Function ) ) ret |= Attributes.Static;
+
+			return ret;
+		}
+
+		static if( HasUDA!( SuperType, BindVersion ) )
+		{
+			enum IncludeVersions = GetUDA!( SuperType, BindVersion ).strVersions;
+		}
+		else
+		{
+			enum string[] IncludeVersions = string[].init;
+		}
+
+		static if( HasUDA!( SuperType, BindExcludeVersion ) )
+		{
+			enum ExcludeVersions = GetUDA!( SuperType, BindExcludeVersion ).strVersions;
+		}
+		else
+		{
+			enum string[] ExcludeVersions = string[].init;
+		}
+
+
+		import std.traits		: ParameterIdentifierTuple
+								, ParameterTypeTuple
+								, ParameterStorageClassTuple
+								, ParameterStorageClass
+								, ReturnType;
+
+		alias ParamTypes		= ParameterTypeTuple!Function;
+		alias ParamNames		= ParameterIdentifierTuple!Function;
+		alias ParamStorages		= ParameterStorageClassTuple!Function;
+		alias ParamReturnType	= ReturnType!Function;
+
+		enum FunctionAttribs	= GetAttribs();
+		enum DReturnsRef		= FunctionAttribs & Attributes.Ref ? "ref" : "";
+		enum CReturnsRef		= FunctionAttribs & Attributes.Ref ? "&" : "";
+		enum FunctionIsConst	= FunctionAttribs & Attributes.Const ? " const" : "";
+
+		string storageToString( uint eClass )
+		{
+			string[] strOutputs;
+
+			if( eClass & ParameterStorageClass.ref_ )
+				strOutputs ~= "ref";
+
+			string output = strOutputs.joinWith( " " );
+			if( output.length > 0 )
+				output ~= " ";
+			return output;
+		}
+
+		string storageToCRef( uint eClass )
+		{
+			return ( eClass & ParameterStorageClass.ref_ ) ? "&" : "";
+		}
+
+		string[] strDParams;
+		string[] strDCallParams;
+		string[] strDOverrideCallParams;
+		string[] strCParams;
+		string[] strCTypes;
+		string[] strDImports;
+
+		strDImports ~= "import " ~ ModuleName!SuperType ~ ";";
+
+		static if( !is( ParentType == void ) && !( FunctionAttribs & Attributes.Static ) )
+		{
+			strCParams ~= ParentType.stringof ~ "* const thisptr";
+			strDCallParams ~= "cast(" ~ SuperType.stringof ~ "*)&this";
+		}
+
+		foreach( iIndex, Type; ParamTypes )
+		{
+			string strCType = CTypeString!( Type ) ~ storageToCRef( ParamStorages[ iIndex ] );
+
+			strDParams ~= storageToString( ParamStorages[ iIndex ] ) ~ FullTypeName!Type ~ " " ~ ParamNames[ iIndex ];
+			strDCallParams ~= ParamNames[ iIndex ];
+			strDOverrideCallParams ~= ParamNames[ iIndex ];
+			strCParams ~= strCType ~ " " ~ ParamNames[ iIndex ];
+			strCTypes ~= strCType;
+
+			//pragma( msg, "Checking type " ~ Type.stringof );
+			static if( IsUserType!( Unqualified!( Type ) ) )
 			{
-				enum IncludeVersions = GetUDA!( SuperType, BindVersion ).strVersions;
+				// TODO: MAKE THIS LESS RUBBISH
+				strDImports ~= "import " ~ ModuleName!( Unqualified!( binderoo.traits.PointerTarget!Type ) ) ~ ";";
 			}
-			else
-			{
-				enum string[] IncludeVersions = string[].init;
-			}
-
-			static if( HasUDA!( SuperType, BindExcludeVersion ) )
-			{
-				enum ExcludeVersions = GetUDA!( SuperType, BindExcludeVersion ).strVersions;
-			}
-			else
-			{
-				enum string[] ExcludeVersions = string[].init;
-			}
-
-
-			import std.traits		: ParameterIdentifierTuple
-									, ParameterTypeTuple
-									, ParameterStorageClassTuple
-									, ParameterStorageClass
-									, ReturnType
-									, moduleName;
-
-			alias ParamTypes		= ParameterTypeTuple!Function;
-			alias ParamNames		= ParameterIdentifierTuple!Function;
-			alias ParamStorages		= ParameterStorageClassTuple!Function;
-			alias ParamReturnType	= ReturnType!Function;
-
-			enum FunctionAttribs	= GetAttribs();
-			enum DReturnsRef		= FunctionAttribs & Attributes.Ref ? "ref" : "";
-			enum CReturnsRef		= FunctionAttribs & Attributes.Ref ? "&" : "";
-			enum FunctionIsConst	= FunctionAttribs & Attributes.Const ? " const" : "";
-
-			string storageToString( uint eClass )
-			{
-				string[] strOutputs;
-
-				if( eClass & ParameterStorageClass.ref_ )
-					strOutputs ~= "ref";
-
-				string output = strOutputs.joinWith( " " );
-				if( output.length > 0 )
-					output ~= " ";
-				return output;
-			}
-
-			string storageToCRef( uint eClass )
-			{
-				return ( eClass & ParameterStorageClass.ref_ ) ? "&" : "";
-			}
-
-			string[] strDParams;
-			string[] strDCallParams;
-			string[] strDOverrideCallParams;
-			string[] strCParams;
-			string[] strCTypes;
-
-			static if( !is( ParentType == void ) && !( FunctionAttribs & Attributes.Static ) )
-			{
-				strCParams ~= ParentType.stringof ~ "* const thisptr";
-				strDCallParams ~= "cast(" ~ SuperType.stringof ~ "*)&this";
-			}
-
-			foreach( iIndex, Type; ParamTypes )
-			{
-				string strCType = CTypeString!( Type ) ~ storageToCRef( ParamStorages[ iIndex ] );
-
-				strDParams ~= storageToString( ParamStorages[ iIndex ] ) ~ ParamTypes[ iIndex ].stringof ~ " " ~ ParamNames[ iIndex ];
-				strDCallParams ~= ParamNames[ iIndex ];
-				strDOverrideCallParams ~= ParamNames[ iIndex ];
-				strCParams ~= strCType ~ " " ~ ParamNames[ iIndex ];
-				strCTypes ~= strCType;
-			}
+		}
 	
-			string[] strUDAs;
-			foreach( UDA; __traits( getAttributes, Function ) )
-			{
-				strUDAs ~= UDA.stringof;
-			}
+		string[] strUDAs;
+		foreach( UDA; __traits( getAttributes, Function ) )
+		{
+			strUDAs ~= UDA.stringof;
+		}
 
-			method.DPrototypeDecl = strUDAs.joinWith( "@", "", " " ) ~ " " ~ FunctionIsStatic ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " " ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ")" ~ FunctionIsConst;
-			method.DCallWithParams = strDCallParams.joinWith( ", " );
+		method.DPrototypeDecl = strUDAs.joinWith( "@", "", " " ) ~ " " ~ FunctionIsStatic ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " " ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ")" ~ FunctionIsConst;
+		method.DCallWithParams = strDCallParams.joinWith( ", " );
 
+		static if( !( FunctionAttribs & Attributes.Static ) )
+		{
+			strDParams = [ SuperType.stringof ~ "* thisptr" ] ~ strDParams;
+		}
+
+		version( LDC )
+		{
+			import std.conv : to;
+			method.DDeclForFnPointerSetup = "extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " prototype" ~ to!string( iFuncIndex ) ~ "(" ~ strDParams.joinWith( ", " ) ~ ")";
+			method.DDeclForFnPointer = "typeof( &prototype" ~ to!string( iFuncIndex ) ~ " )";				
+		}
+		else
+		{
+			method.DDeclForFnPointer = "RawFnPointerAlias!( \"import " ~ moduleName!SuperType ~ "; extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " prototype(" ~ strDParams.joinWith( ", " ) ~ ");\" )";
+		}
+
+		method.DVirtualOverrideName = SuperType.stringof ~ ".CPPLinkage_" ~ FunctionName;
+		static if( !is( ParamReturnType == void ) )
+		{
+			method.DVirtualOverrideCall = "extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " CPPLinkage_" ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ") { return thisptr." ~ FunctionName ~ "( " ~ strDOverrideCallParams.joinWith(", " ) ~ " ); }";
+		}
+		else
+		{
+			method.DVirtualOverrideCall = "extern (C++) static void CPPLinkage_" ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ") { thisptr." ~ FunctionName ~ "( " ~ strDOverrideCallParams.joinWith(", " ) ~ " ); }";
+		}
+
+		static if( !is( ParentType == void ) )
+		{
+			// TODO: THIS PART IS TEH BROKENS
 			static if( !( FunctionAttribs & Attributes.Static ) )
 			{
-				strDParams = [ SuperType.stringof ~ "* thisptr" ] ~ strDParams;
-			}
-
-			version( LDC )
-			{
-				import std.conv : to;
-				method.DDeclForFnPointerSetup = "extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " prototype" ~ to!string( iFuncIndex ) ~ "(" ~ strDParams.joinWith( ", " ) ~ ")";
-				method.DDeclForFnPointer = "typeof( &prototype" ~ to!string( iFuncIndex ) ~ " )";				
-			}
-			else
-			{
-				method.DDeclForFnPointer = "RawFnPointerAlias!( \"import " ~ moduleName!SuperType ~ "; extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " prototype(" ~ strDParams.joinWith( ", " ) ~ ");\" )";
-			}
-
-			method.DVirtualOverrideName = SuperType.stringof ~ ".CPPLinkage_" ~ FunctionName;
-			static if( !is( ParamReturnType == void ) )
-			{
-				method.DVirtualOverrideCall = "extern (C++) static " ~ DReturnsRef ~ " " ~ ParamReturnType.stringof ~ " CPPLinkage_" ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ") { return thisptr." ~ FunctionName ~ "( " ~ strDOverrideCallParams.joinWith(", " ) ~ " ); }";
-			}
-			else
-			{
-				method.DVirtualOverrideCall = "extern (C++) static void CPPLinkage_" ~ FunctionName ~ "(" ~ strDParams.joinWith( ", " ) ~ ") { thisptr." ~ FunctionName ~ "( " ~ strDOverrideCallParams.joinWith(", " ) ~ " ); }";
-			}
-
-			method.CSignatureForMatching = CTypeString!ParamReturnType ~ CReturnsRef ~ "(" ~ strCTypes.joinWith( ", " ) ~ ")" ~ FunctionIsConst;
-			static if( !is( ParentType == void ) )
-			{
-				// TODO: THIS PART IS TEH BROKENS
-				static if( !( FunctionAttribs & Attributes.Static ) )
-				{
-					method.CExplicitCast = CTypeString!ParamReturnType ~ CReturnsRef ~ "(" ~ CTypeString!( SuperType.HighestLevelCPPType ) ~ "::*)(" ~ strCTypes.joinWith( ", " ) ~ ")" ~ FunctionIsConst;
-				}
-				else
-				{
-					method.CExplicitCast = CTypeString!ParamReturnType ~ CReturnsRef ~ "(*)(" ~ strCTypes.joinWith( ", " ) ~ ")";
-				}
-
-				method.RawImportData = BindRawImport( CTypeString!( SuperType.HighestLevelCPPType ) ~ "::" ~ FunctionName, method.CExplicitCast, IncludeVersions, ExcludeVersions, RawImportType, 0, ( FunctionAttribs & Attributes.Const ), false, IntroducedVersion, MaxVersion );
+				method.CExplicitCast = CTypeString!ParamReturnType ~ CReturnsRef ~ "(" ~ CTypeString!( SuperType.HighestLevelCPPType ) ~ "::*)(" ~ strCTypes.joinWith( ", " ) ~ ")" ~ FunctionIsConst;
 			}
 			else
 			{
 				method.CExplicitCast = CTypeString!ParamReturnType ~ CReturnsRef ~ "(*)(" ~ strCTypes.joinWith( ", " ) ~ ")";
-				method.RawImportData = BindRawImport( FunctionName, method.CExplicitCast, IncludeVersions, ExcludeVersions, RawImportType, 0, ( FunctionAttribs & Attributes.Const ), false, IntroducedVersion, MaxVersion );
 			}
-		}
 
-		return method;
+			method.RawImportData = BindRawImport( CTypeString!( SuperType.HighestLevelCPPType ) ~ "::" ~ FunctionName, method.CExplicitCast, IncludeVersions, ExcludeVersions, RawImportType, 0, ( FunctionAttribs & Attributes.Const ), false, IntroducedVersion, MaxVersion );
+		}
+		else
+		{
+			method.CExplicitCast = CTypeString!ParamReturnType ~ CReturnsRef ~ "(*)(" ~ strCTypes.joinWith( ", " ) ~ ")";
+			method.RawImportData = BindRawImport( FunctionName, method.CExplicitCast, IncludeVersions, ExcludeVersions, RawImportType, 0, ( FunctionAttribs & Attributes.Const ), false, IntroducedVersion, MaxVersion );
+		}
 	}
 
+	return method;
+}
+
+AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
+{
 	AllFoundMethods foundMethods;
 
 	static if( !is( BaseType == void ) )
@@ -434,7 +471,9 @@ AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
 
 			foreach_reverse( ThisOverload; TheseOverloads )
 			{
-				FoundMethod ThisFoundMethod = Rewrite!ThisOverload( foundMethods.length );
+				import std.algorithm : find;
+
+				FoundMethod ThisFoundMethod = Rewrite!( ThisOverload, SuperType, ThisType, BaseType )( foundMethods.length );
 				if( ThisType.StructType == InheritanceStructType.CPP )
 				{
 					FoundMethod foundMethod = ThisFoundMethod;
@@ -442,19 +481,31 @@ AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
 					final switch( foundMethod.RawImportData.eKind ) with( BindRawImport.FunctionKind )
 					{
 					case Static:
-						foundMethod.RawImportData.iOrderInTable = cast(int)foundMethods.staticMembers.length;
-						foundMethods.staticMembers ~= foundMethod;
+						auto found = foundMethods.staticMembers.find!( ( a, b ) => a.RawImportData.uNameHash == b.RawImportData.uNameHash && a.RawImportData.uSignatureHash == b.RawImportData.uSignatureHash )( foundMethod );
+						if( found.length == 0 )
+						{
+							foundMethod.RawImportData.iOrderInTable = cast(int)foundMethods.staticMembers.length;
+							foundMethods.staticMembers ~= foundMethod;
+						}
 						break;
 					case Method:
 					case Constructor:
 					case Destructor:
-						foundMethod.RawImportData.iOrderInTable = cast(int)foundMethods.nonVirtualMembers.length;
-						foundMethods.nonVirtualMembers ~= foundMethod;
+						auto found = foundMethods.nonVirtualMembers.find!( ( a, b ) => a.RawImportData.uNameHash == b.RawImportData.uNameHash && a.RawImportData.uSignatureHash == b.RawImportData.uSignatureHash )( foundMethod );
+						if( found.length == 0 )
+						{
+							foundMethod.RawImportData.iOrderInTable = cast(int)foundMethods.nonVirtualMembers.length;
+							foundMethods.nonVirtualMembers ~= foundMethod;
+						}
 						break;
 					case Virtual:
 					case VirtualDestructor:
-						foundMethod.RawImportData.iOrderInTable = cast(int)foundMethods.virtualMembers.length;
-						foundMethods.virtualMembers ~= foundMethod;
+						auto found = foundMethods.virtualMembers.find!( ( a, b ) => a.RawImportData.uNameHash == b.RawImportData.uNameHash && a.RawImportData.uSignatureHash == b.RawImportData.uSignatureHash )( foundMethod );
+						if( found.length == 0 )
+						{
+							foundMethod.RawImportData.iOrderInTable = cast(int)foundMethods.virtualMembers.length;
+							foundMethods.virtualMembers ~= foundMethod;
+						}
 						break;
 					case Invalid:
 						break;
@@ -464,10 +515,7 @@ AllFoundMethods FindAllMethods( SuperType, ThisType, BaseType )( )
 				{
 					//static assert( ThisFoundMethod.RawImportData.eKind == BindRawImport.FunctionKind.Virtual, "Bound method " ~ thisMember ~ " in D struct " ~ ThisType.stringof ~ " is not a virtual override!" );
 
-					import std.algorithm : find;
-
 					auto found = foundMethods.virtualMembers.find!( ( a, b ) => a.RawImportData.uNameHash == b.RawImportData.uNameHash && a.RawImportData.uSignatureHash == b.RawImportData.uSignatureHash )( ThisFoundMethod );
-					if( found.length > 0 )
 					{
 						found[ 0 ].bUseDVirtualOverride = true;
 					}

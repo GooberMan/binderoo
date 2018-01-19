@@ -57,9 +57,6 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 
 	static void initialiseModuleBinding()
 	{
-//		import std.stdio : writeln;
-//		writeln( "Initialising ", moduleName!(initialiseModuleBinding), " bindings on type ", Type.stringof, " only..." );
-
 		functionsToImport = generateImports!( Type )();
 		functionsToExport = generateExports!( Type )();
 		objectsToExport = generateObjects!( Type )();
@@ -105,7 +102,6 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 {
 	shared static this()
 	{
-		import std.stdio : writeln;
 		initialiseModuleBinding();
 
 		foreach( newCall; AdditionalStaticThisCalls )
@@ -136,7 +132,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			{
 				static if( !is( ParentClass == void ) )
 				{
-					enum AliasString = fullyQualifiedName!( ParentClass ) ~ "." ~ Alias;
+					enum AliasString = FullTypeName!( ParentClass ) ~ "." ~ Alias;
 				}
 				else
 				{
@@ -146,11 +142,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 				static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
 				{
 					mixin( "alias Type = " ~ AliasString ~ ";" );
-
-					static if( __traits( compiles, moduleName!( Type ) ) )
-					{
-						mixin( "import " ~ moduleName!( Type ) ~ ";" );
-					}
+					mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 
 					static if( IsUserTypeButNotEnum!( Type ) && Alias == Type.stringof )
 					{
@@ -176,8 +168,8 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 				static if( ( is( Type == struct ) || is( Type == class ) )
 							&& !HasUDA!( Type, BindNoExportObject ) )
 				{
-					objects ~= BoundObject( DString( fullyQualifiedName!( Type ) ),
-											fnv1a_64( fullyQualifiedName!( Type ) ),
+					objects ~= BoundObject( DString( FullTypeName!( Type ) ),
+											fnv1a_64( FullTypeName!( Type ) ),
 											&BoundObjectFunctions!( Type ).allocObj,
 											&BoundObjectFunctions!( Type ).deallocObj,
 											&BoundObjectFunctions!( Type ).thunkObj,
@@ -197,11 +189,11 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			return objects;
 		}
 
-		mixin( "import " ~ moduleName!( functionsToImport ) ~ ";" );
+		mixin( "import " ~ ModuleName!( functionsToImport ) ~ ";" );
 
 		static if( ObjectTypes.length == 0 )
 		{
-			alias ModuleTypes = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( moduleName!( functionsToImport ) ) ) );
+			alias ModuleTypes = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
 			return gatherFor!( true, ModuleTypes )();
 		}
 		else
@@ -243,9 +235,6 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			{
 				alias TableType = typeof( __traits( getMember, Type, TableStaticMember ) );
 
-				// import core.stdc.stdio : printf;
-				// printf( TableType.stringof ~ " grabber for type " ~ Type.stringof ~ "\n" );
-
 				static if( Type.StructType == InheritanceStructType.CPP )
 				{
 					alias CTypeData = GetUDA!( Type, CTypeName );
@@ -255,31 +244,12 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 					alias CTypeData = GetUDA!( typeof( Type.base ), CTypeName );
 				}
 
-				// More readable, but performs slower at compile time :-(
-				/+foreach( Variable; VariableDescriptorsByUDA!( TableType, BindRawImport ) )
+				foreach( iIndex, TableMember; TableType.init.tupleof )
 				{
-				alias ImportData = Variable.GetUDA!( BindRawImport );
-				//pragma( msg, fullyQualifiedName!( TableType ) ~ "." ~ Variable.Name ~ " is importing " ~ ImportData.strCName );
-
-				imports ~= BoundFunction(	DString( ImportData.strCName )
-				, DString( ImportData.strCSignature )
-				, DString( CTypeData.name )
-				, DString( CTypeData.header )
-				, BoundFunction.Hashes( ImportData.uNameHash, ImportData.uSignatureHash )
-				, mixin( "cast(void*) &" ~ fullyQualifiedName!( Type ) ~ "." ~ TableStaticMember ~ "." ~ Variable.Name )
-				, ImportData.iIntroducedVersion
-				, BoundFunction.Resolution.WaitingForImport );
-				}+/
-
-				foreach( tableMember; __traits( allMembers, TableType ) )
-				{
-					static if( IsAccessible!( TableType, tableMember )
-							   && is( typeof( __traits( getMember, TableType, tableMember ) ) )
-								   && !is( typeof( __traits( getMember, TableType, tableMember ) ) == void )
-								   && IsMemberVariable!( __traits( getMember, TableType, tableMember ) )
-								   && HasUDA!( __traits( getMember, TableType, tableMember ), BindRawImport ) )
+					static if( HasUDA!( TableType.tupleof[ iIndex ], BindRawImport ) )
 					{
-						alias ImportData = GetUDA!( __traits( getMember, TableType, tableMember ), BindRawImport );
+						enum MemberName = __traits( identifier, TableType.tupleof[ iIndex ] );
+						alias ImportData = GetUDA!( TableType.tupleof[ iIndex ], BindRawImport );
 
 						enum AbstractFlag = ImportData.bOwnerIsAbstract ? BoundFunction.Flags.OwnerIsAbstract : BoundFunction.Flags.None;
 						enum ConstFlag = ImportData.bIsConst ? BoundFunction.Flags.Const : BoundFunction.Flags.None;
@@ -303,7 +273,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 													, ImportData.strIncludeVersions.toSliceRecursive
 													, ImportData.strExcludeVersions.toSliceRecursive
 													, BoundFunction.Hashes( ImportData.uNameHash, ImportData.uSignatureHash )
-													, mixin( "cast(void*) &" ~ fullyQualifiedName!( Type ) ~ "." ~ TableStaticMember ~ "." ~ tableMember )
+													, mixin( "cast(void*) &" ~ FullTypeName!( Type ) ~ "." ~ TableStaticMember ~ "." ~ MemberName )
 													, ImportData.iIntroducedVersion
 													, ImportData.iOrderInTable
 													, BoundFunction.Resolution.WaitingForImport
@@ -336,11 +306,11 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			return imports;
 		}
 
-		mixin( "import " ~ moduleName!( functionsToImport ) ~ ";" );
+		mixin( "import " ~ ModuleName!( generateObjects ) ~ ";" );
 
 		static if( ImportTypes.length == 0 )
 		{
-			alias Types = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( moduleName!( functionsToImport ) ) ) );
+			alias Types = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
 			return gatherFor!( true, Types )();
 		}
 		else
@@ -367,9 +337,9 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 						alias Descriptor = FunctionDescriptor!( Symbol );
 						alias ExportData = Descriptor.GetUDA!( BindExport );
 
-						static assert( Descriptor.IsCPlusPlusFunction, fullyQualifiedName!( Symbol ) ~ " can only be exported as extern( C++ ) for now." );
+						static assert( Descriptor.IsCPlusPlusFunction, FullTypeName!( Symbol ) ~ " can only be exported as extern( C++ ) for now." );
 
-						enum FullName = fullyQualifiedName!( Symbol );
+						enum FullName = FullTypeName!( Symbol );
 						enum Signature = FunctionString!( Descriptor ).CSignature;
 						enum DDecl = FunctionString!( Descriptor ).DDecl;
 						enum CDecl = FunctionString!( Descriptor ).CDecl;
@@ -393,7 +363,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 														, Slice!DString.init
 														, Slice!DString.init
 														, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
-														, mixin( "&" ~ fullyQualifiedName!( Symbol ) )
+														, mixin( "&" ~ FullTypeName!( Symbol ) )
 														, ExportData.iIntroducedVersion
 														, 0
 														, BoundFunction.Resolution.Exported
@@ -407,10 +377,10 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			return foundExports;
 		}
 
-		mixin( "import " ~ moduleName!( functionsToImport ) ~ ";" );
+		mixin( "import " ~ ModuleName!( functionsToImport ) ~ ";" );
 		static if( ExportTypes.length == 0 )
 		{
-			return functionGrabber!( void, __traits( allMembers, mixin( moduleName!( functionsToImport ) ) ) );
+			return functionGrabber!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
 		}
 		else
 		{
@@ -498,7 +468,7 @@ public string[] generateCPPStyleExportDeclaration( BoundFunction[] functions )
 				"\n"
 				"// Dirty hack\n"
 				"#define _ALLOW_KEYWORD_MACROS\n"
-				"#define private public\n"StdCall
+				"#define private public\n"
 				"#define protected public";*/
 
 	outputs ~=	"#include \"binderoo/defs.h\"\n"
