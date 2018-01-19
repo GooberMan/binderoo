@@ -185,6 +185,14 @@ namespace binderoo
 		BIND_INLINE bool				operator==( Allocator< Space, _otherTy, _otherA >& /*rhs*/ )				{ return true; }
 		//--------------------------------------------------------------------
 
+		template< AllocatorSpace Space, typename _otherTy, size_t _otherA > 
+		BIND_INLINE bool				operator!=( const Allocator< Space, _otherTy, _otherA >& /*rhs*/ ) const	{ return false; }
+		//--------------------------------------------------------------------
+
+		template< AllocatorSpace Space, typename _otherTy, size_t _otherA > 
+		BIND_INLINE bool				operator!=( Allocator< Space, _otherTy, _otherA >& /*rhs*/ )				{ return false; }
+		//--------------------------------------------------------------------
+
 		BIND_INLINE pointer				address( reference x ) const				{ return &x; }
 		BIND_INLINE const_pointer		address( const_reference x ) const			{ return &x; }
 		//--------------------------------------------------------------------
@@ -272,6 +280,10 @@ namespace binderoo
 
 		template< AllocatorSpace Space, typename _otherTy, size_t _otherA >
 		BIND_INLINE bool				operator==( const Allocator< Space,  _otherTy, _otherA >& /*rhs*/ )		{ return true; }
+		//--------------------------------------------------------------------
+
+		template< AllocatorSpace Space, typename _otherTy, size_t _otherA >
+		BIND_INLINE bool				operator!=( const Allocator< Space,  _otherTy, _otherA >& /*rhs*/ )		{ return true; }
 		//--------------------------------------------------------------------
 	};
 }
