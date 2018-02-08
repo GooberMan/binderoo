@@ -236,11 +236,11 @@ template<> struct TypeNames< FullCType& > \
 }\
 
 BIND_TYPE_NAME( char, char )
-BIND_TYPE_NAME( unsigned char, ubyte )
-BIND_TYPE_NAME( short, short )
-BIND_TYPE_NAME( unsigned short, ushort )
-BIND_TYPE_NAME( int, int )
-BIND_TYPE_NAME( unsigned int, uint )
+BIND_TYPE_NAME( uint8_t, ubyte )
+BIND_TYPE_NAME( int16_t, short )
+BIND_TYPE_NAME( uint16_t, ushort )
+BIND_TYPE_NAME( int32_t, int )
+BIND_TYPE_NAME( uint32_t, uint )
 BIND_TYPE_NAME( int64_t, long )
 BIND_TYPE_NAME( uint64_t, ulong )
 BIND_TYPE_NAME( wchar_t, wchar )
