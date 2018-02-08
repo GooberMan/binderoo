@@ -196,6 +196,7 @@ enum CTypeNameOverride( T : uint )			= "uint32_t";
 enum CTypeNameOverride( T : long )			= "int64_t";
 enum CTypeNameOverride( T : ulong )			= "uint64_t";
 enum CTypeNameOverride( T : wchar )			= "wchar_t";
+enum CTypeNameOverride( T : char )			= "char"; // char will cast to a byte if you don't redefine here
 enum CTypeNameOverride( T : bool )			= "bool"; // Returns char otherwise when parsing functions? o_O
 //----------------------------------------------------------------------------
 
