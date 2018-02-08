@@ -49,54 +49,76 @@ enum BeginsVirtual
 }
 //----------------------------------------------------------------------------
 
-mixin template CPPStructBase( BeginsVirtual eBeginsVirtual = BeginsVirtual.No )
+mixin template CPPStruct_Contents(	InheritanceStructType eType,
+									BeginsVirtual eOriginatesVTable,
+									BaseTypes... )
 {
-	enum StructType				= InheritanceStructType.CPP;
-	alias BaseType				= void;
-	alias HighestLevelCPPType	= typeof( this );
+	enum StructType					= eType;
+	enum OriginatesVTable			= eOriginatesVTable;
 
-	enum OriginatesVTable	= eBeginsVirtual == BeginsVirtual.Yes;
-	enum CanConstructVTable	= OriginatesVTable;
+	static if( BaseTypes.length == 0 )
+	{
+		alias BaseType				= void;
+		enum CanConstructVTable		= OriginatesVTable;
+	}
+	else static if( BaseTypes.length == 1 )
+	{
+		alias BaseType				= BaseTypes[ 0 ];
+		enum CanConstructVTable		= OriginatesVTable || BaseType.CanConstructVTable;
+
+		static assert( !OriginatesVTable || !BaseType.CanConstructVTable, "VTable chain is broken somewhere with type " ~ typeof( this ).stringof );
+	}
+
+	static if( StructType == InheritanceStructType.CPP )
+	{
+		alias HighestLevelCPPType	= typeof( this );
+	}
+	else
+	{
+		alias HighestLevelCPPType	= BaseType.HighestLevelCPPType;
+	}
+
+	static if( !is( BaseType == void ) )
+	{
+		@InheritanceBase BaseType	base;
+		alias base this;
+	}
 
 	static if( OriginatesVTable )
 	{
-		@BindNoSerialise void* _vtablePointer;
+		@BindNoSerialise void*		_vtablePointer;
 	}
+
 }
 //----------------------------------------------------------------------------
 
-mixin template CPPStructInherits( ThisBaseType, BeginsVirtual eBeginsVirtual = BeginsVirtual.No )
+mixin template CPPStructBase( )
 {
-	enum StructType				= InheritanceStructType.CPP;
-	alias BaseType				= ThisBaseType;
-	alias HighestLevelCPPType	= typeof( this );
-
-	@InheritanceBase ThisBaseType base;
-	alias base this;
-
-	enum OriginatesVTable	= eBeginsVirtual == BeginsVirtual.Yes;
-	enum CanConstructVTable	= OriginatesVTable || BaseType.CanConstructVTable;
-
-	static assert( !OriginatesVTable || !BaseType.CanConstructVTable, "VTable chain is broken somewhere with type " ~ typeof( this ).stringof );
-
-	static if( OriginatesVTable )
-	{
-		@BindNoSerialize void* _vtablePointer;
-	}
+	mixin CPPStruct_Contents!( InheritanceStructType.CPP, BeginsVirtual.No );
 }
 //----------------------------------------------------------------------------
 
-mixin template DStructInherits( ThisBaseType )
+mixin template CPPStructBase_BeginVirtual( )
 {
-	enum StructType				= InheritanceStructType.D;
-	alias BaseType				= ThisBaseType;
-	alias HighestLevelCPPType	= BaseType.HighestLevelCPPType;
+	mixin CPPStruct_Contents!( InheritanceStructType.CPP, BeginsVirtual.Yes );
+}
+//----------------------------------------------------------------------------
 
-	@InheritanceBase ThisBaseType base;
-	alias base this;
+mixin template CPPStructInherits( BaseTypes... )
+{
+	mixin CPPStruct_Contents!( InheritanceStructType.CPP, BeginsVirtual.No, BaseTypes );
+}
+//----------------------------------------------------------------------------
 
-	enum OriginatesVTable	= false;
-	enum CanConstructVTable	= BaseType.CanConstructVTable;
+mixin template CPPStructInherits_BeginVirtual( BaseTypes... )
+{
+	mixin CPPStruct_Contents!( InheritanceStructType.CPP, BeginsVirtual.Yes, BaseTypes );
+}
+//----------------------------------------------------------------------------
+
+mixin template DStructInherits( BaseTypes... ) if( BaseTypes.length > 0 )
+{
+	mixin CPPStruct_Contents!( InheritanceStructType.D, BeginsVirtual.No, BaseTypes );
 }
 //----------------------------------------------------------------------------
 
@@ -188,9 +210,17 @@ struct AllFoundMethods
 template OverloadsOf( ThisType, alias thisMember )
 {
 	import std.typetuple : TypeTuple;
+	import binderoo.objectprivacy;
 
-	version( MSVCInheritance ) alias OverloadsOf = TypeTuple!( __traits( getOverloads, ThisType, thisMember ) );
-	else alias OverloadsOf = TypeTuple!( __traits( getOverloads, ThisType, thisMember ) );
+	static if( PrivacyOf!( ThisType, thisMember ) != PrivacyLevel.Inaccessible )
+	{
+		version( MSVCInheritance ) alias OverloadsOf = TypeTuple!( __traits( getOverloads, ThisType, thisMember ) );
+		else alias OverloadsOf = TypeTuple!( __traits( getOverloads, ThisType, thisMember ) );
+	}
+	else
+	{
+		alias OverloadsOf = TypeTuple!();
+	}
 }
 //----------------------------------------------------------------------------
 
@@ -689,11 +719,11 @@ string GenerateStructInterface( ThisType )( AllFoundMethods methods )
 		FoundVariable thisVar;
 		thisVar.strTypeName = VarType.stringof;
 		thisVar.strVarName = __traits( identifier, ThisType.tupleof[ iIndex ] );
-		foreach( UDA; __traits( getAttributes, __traits( getMember, ThisType, __traits( identifier, ThisType.tupleof[ iIndex ] ) ) ) )
+		foreach( UDA; __traits( getAttributes, ThisType.tupleof[ iIndex ] ) )
 		{
 			thisVar.strUDAs ~= "@" ~ UDA.stringof ~ " ";
 		}
-		thisVar.strProtection = __traits( getProtection, __traits( getMember, ThisType, __traits( identifier, ThisType.tupleof[ iIndex ] ) ) );
+		thisVar.strProtection = __traits( getProtection, ThisType.tupleof[ iIndex ] ); // __traits( getMember, ThisType, __traits( identifier, ThisType.tupleof[ iIndex ] ) ) );
 		variables ~= thisVar;
 	}
 
