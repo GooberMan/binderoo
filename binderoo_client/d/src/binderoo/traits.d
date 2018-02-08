@@ -483,6 +483,12 @@ template ZeroValue( T )
 }
 //----------------------------------------------------------------------------
 
+/+template TypeTuple( T... ) if( T.length > 0 )
+{
+	alias TypeTuple = T;
+}+/
+//----------------------------------------------------------------------------
+
 string FullTypeName( Symbol )()
 {
 	static if( is( Symbol A == const A ) )
@@ -660,9 +666,9 @@ string[] gatherImports( T )()
 }
 //----------------------------------------------------------------------------
 
-auto joinWith( T )( T[] values, T joiner ) pure @safe nothrow if( SupportsAppend!( T ) )
+auto joinWith( alias Pred = ( ref val ) => val, CT, T )( CT[] values, T joiner ) pure @safe nothrow if( SupportsAppend!( T ) )
 {
-	T output;
+	Unqualified!T output;
 
 	foreach( ref value; values )
 	{
@@ -670,7 +676,24 @@ auto joinWith( T )( T[] values, T joiner ) pure @safe nothrow if( SupportsAppend
 		{
 			output ~= joiner;
 		}
-		output ~= value;
+		output ~= Pred( value );
+	}
+
+	return output;
+}
+//----------------------------------------------------------------------------
+
+auto joinWithReverse( alias Pred = ( ref val ) => val, CT, T )( CT[] values, T joiner ) pure @safe nothrow if( SupportsAppend!( T ) )
+{
+	Unqualified!T output;
+
+	foreach_reverse( ref value; values )
+	{
+		if( output.length > 0 )
+		{
+			output ~= joiner;
+		}
+		output ~= Pred( value );
 	}
 
 	return output;
