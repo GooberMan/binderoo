@@ -1034,7 +1034,7 @@ export extern( C ) void destroyObjectByHash( ulong objectHash, void* pObj )
 
 alias BindingRawAllocator = extern( C ) void* function( size_t size );
 
-export extern( C ) const(char)* generateCPPStyleExportDeclarationsForAllObjects( BindingRawAllocator allocator, const char* pVersion )
+export extern( C ) const( char )* generateCPPStyleExportDeclarationsForAllObjects( BindingRawAllocator allocator, const( char )* pVersion )
 {
 	import core.stdc.string;
 
@@ -1060,7 +1060,7 @@ export extern( C ) const(char)* generateCPPStyleExportDeclarationsForAllObjects(
 }
 //----------------------------------------------------------------------------
 
-export extern( C ) const(char)* generateCSharpStyleImportDeclarationsForAllObjects( BindingRawAllocator allocator, const char* pVersion )
+export extern( C ) const( char )* generateCSharpStyleImportDeclarationsForAllObjects( BindingRawAllocator allocator, const( char )* pVersion )
 {
 	import core.stdc.string;
 
@@ -1086,7 +1086,7 @@ export extern( C ) const(char)* generateCSharpStyleImportDeclarationsForAllObjec
 }
 //----------------------------------------------------------------------------
 
-export extern( C ) void generateDInterfaceFiles( const char* pOutputFolder )
+export extern( C ) void generateDInterfaceFiles( const( char )* pOutputFolder )
 {
 	import core.stdc.string : strlen;
 	generateDInterfaceFiles( cast(string)pOutputFolder[ 0 .. strlen( pOutputFolder ) ] );
