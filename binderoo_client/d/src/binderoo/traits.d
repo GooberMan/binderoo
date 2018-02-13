@@ -116,7 +116,14 @@ template IsUserTypeButNotEnum( T )
 }
 //----------------------------------------------------------------------------
 
-alias IsAggregateType = IsUserTypeButNotEnum;
+template IsUserTypeButNotEnum( alias T )
+{
+	enum IsUserTypeButNotEnum = false;
+}
+//----------------------------------------------------------------------------
+
+alias IsAggregateType( T ) = IsUserTypeButNotEnum!T;
+alias IsAggregateType( alias T ) = IsUserTypeButNotEnum!T;
 //----------------------------------------------------------------------------
 
 template IsIntegral( T )
@@ -483,6 +490,11 @@ template ZeroValue( T )
 }
 //----------------------------------------------------------------------------
 
+template Alias( alias A )
+{
+	alias Alias = A;
+}
+
 /+template TypeTuple( T... ) if( T.length > 0 )
 {
 	alias TypeTuple = T;
@@ -593,6 +605,8 @@ string ModuleName( alias Symbol )()
 
 	static if( __traits( compiles, __traits( parent, Symbol ) ) )
 	{
+		alias Parent = Alias!( __traits( parent, Symbol ) );
+
 		static if( is( Symbol ) && IsTemplatedType!Symbol )
 		{
 			static if( __traits( parent, TemplateOf!( Symbol ) ).stringof.startsWith( "module " ) 
@@ -606,8 +620,8 @@ string ModuleName( alias Symbol )()
 			}
 				
 		}
-		else static if( __traits( parent, Symbol ).stringof.startsWith( "module " ) 
-				|| __traits( parent, Symbol ).stringof.startsWith( "package " ) )
+		else static if( Parent.stringof.startsWith( "module " ) 
+				|| Parent.stringof.startsWith( "package " ) )
 		{
 			return FullTypeName!( __traits( parent, Symbol ) );
 		}
