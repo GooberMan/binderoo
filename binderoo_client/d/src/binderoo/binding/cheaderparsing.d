@@ -2119,6 +2119,7 @@ string OpString( int op )
 	}
 }
 
+@BindNoExportObject
 struct Operation
 {
 	int 		op = Assign;
