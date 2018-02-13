@@ -44,6 +44,7 @@ namespace binderoo
 	typedef void*			( BIND_C_CALL *BoundObjectThunk )		( void* pObject );
 	typedef const char*		( BIND_C_CALL *BoundObjectSerialise )	( void* pObject );
 	typedef void			( BIND_C_CALL *BoundObjectDeserialise )	( void* pObject, const char* pJSONRepresentation );
+	typedef void*			BoundObjectDLangCall;
 	//------------------------------------------------------------------------
 
 	struct BoundObject
@@ -70,6 +71,9 @@ namespace binderoo
 
 		Type						eType;
 
+	private:
+		BoundObjectDLangCall		generateCSharpVariables;
+		BoundObjectDLangCall		generateCSharpTypeDecl;
 	};
 	//------------------------------------------------------------------------
 

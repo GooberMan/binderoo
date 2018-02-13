@@ -38,6 +38,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace binderoo
 {
+	typedef void*			BoundFunctionDLangCall;
+
 	struct BIND_ALIGN( 16 ) BoundFunction
 	{
 		enum class Resolution : char
@@ -96,10 +98,6 @@ namespace binderoo
 
 		DString					strFunctionName;
 		DString					strFunctionSignature;
-		DString					strParameterNames;
-		DString					strCPrototype;
-		DString					strDPrototype;
-		DString					strCSharpPrototype;
 		DString					strOwningClass;
 		DString					strRequiredInclude;
 		Slice< DString >		strIncludeVersions;
@@ -112,6 +110,16 @@ namespace binderoo
 		CallingConvention		eCallingConvention;
 		FunctionKind			eFunctionKind;
 		Flags					eFlags;
+
+	private:
+		BoundFunctionDLangCall	CPrototype;
+		BoundFunctionDLangCall	DPrototype;
+		BoundFunctionDLangCall	CSharpPrototype;
+		BoundFunctionDLangCall	ParameterNames;
+		BoundFunctionDLangCall	CParameterTypes;
+		BoundFunctionDLangCall	DParameterTypes;
+		BoundFunctionDLangCall	CSharpParameterTypes;
+		BoundFunctionDLangCall	CSharpParameterNamesWithQualifiers;
 	};
 	//------------------------------------------------------------------------
 }
