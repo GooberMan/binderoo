@@ -211,8 +211,8 @@ namespace binderoo
 	template< typename _ty >
 	struct TypeNames
 	{
-		constexpr const char* getCName() { static_assert( sizeof( _ty ) == 0, "Undefined type! You must declare your type with BIND_TYPE_NAME!" ); return "<INVALID>"; }
-		constexpr const char* getDName() { static_assert( sizeof( _ty ) == 0, "Undefined type! You must declare your type with BIND_TYPE_NAME!" ); return "<INVALID>"; }
+		static constexpr const char* getCName() { static_assert( sizeof( _ty ) == 0, "Undefined type! You must declare your type with BIND_TYPE_NAME!" ); return "<INVALID>"; }
+		static constexpr const char* getDName() { static_assert( sizeof( _ty ) == 0, "Undefined type! You must declare your type with BIND_TYPE_NAME!" ); return "<INVALID>"; }
 	};
 }
 
@@ -220,18 +220,33 @@ namespace binderoo
 namespace binderoo { \
 template<> struct TypeNames< FullCType > \
 { \
-	constexpr const char* getCName() { return #FullCType; } \
-	constexpr const char* getDName() { return #FullDName; } \
+	static constexpr const char* getCName() { return #FullCType; } \
+	static constexpr const char* getDName() { return #FullDName; } \
 };\
 template<> struct TypeNames< FullCType* > \
 { \
-	constexpr const char* getCName() { return #FullCType "*"; } \
-	constexpr const char* getDName() { return #FullDName "*"; } \
+	static constexpr const char* getCName() { return #FullCType "*"; } \
+	static constexpr const char* getDName() { return #FullDName "*"; } \
 };\
 template<> struct TypeNames< FullCType& > \
 { \
-	constexpr const char* getCName() { return #FullCType "&"; } \
-	constexpr const char* getDName() { return "ref " #FullDName; } \
+	static constexpr const char* getCName() { return #FullCType "&"; } \
+	static constexpr const char* getDName() { return "ref " #FullDName; } \
+};\
+template<> struct TypeNames< const FullCType > \
+{ \
+	static constexpr const char* getCName() { return "const " #FullCType; } \
+	static constexpr const char* getDName() { return "const(" #FullDName ")"; } \
+};\
+template<> struct TypeNames< const FullCType* > \
+{ \
+	static constexpr const char* getCName() { return "const " #FullCType "*"; } \
+	static constexpr const char* getDName() { return "const(" #FullDName ")*"; } \
+};\
+template<> struct TypeNames< const FullCType& > \
+{ \
+	static constexpr const char* getCName() { return "const " #FullCType "&"; } \
+	static constexpr const char* getDName() { return "ref const("  #FullDName ")"; } \
 };\
 }\
 
@@ -244,6 +259,7 @@ BIND_TYPE_NAME( uint32_t, uint )
 BIND_TYPE_NAME( int64_t, long )
 BIND_TYPE_NAME( uint64_t, ulong )
 BIND_TYPE_NAME( wchar_t, wchar )
+
 
 #endif // !defined( _BINDEROO_DEFS_H_ )
 
