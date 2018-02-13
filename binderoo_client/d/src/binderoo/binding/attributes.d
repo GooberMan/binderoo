@@ -225,6 +225,11 @@ struct BindBinaryMatch
 }
 //----------------------------------------------------------------------------
 
+struct InheritanceBase
+{
+}
+//----------------------------------------------------------------------------
+
 struct Documentation
 {
 	struct ParameterDocumentation

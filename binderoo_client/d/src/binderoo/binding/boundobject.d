@@ -34,6 +34,7 @@ public import binderoo.slice;
 public import binderoo.typedescriptor;
 
 import binderoo.binding.serialise;
+import binderoo.binding.attributes;
 //----------------------------------------------------------------------------
 
 //version = BoundSerialise;
@@ -44,6 +45,7 @@ alias BoundObjectDeallocator	= extern( C ) void function( void* pObject );
 alias BoundObjectThunk			= extern( C ) void* function( void* );
 alias BoundObjectSerialise		= extern( C ) const( char )* function( void* );
 alias BoundObjectDeserialise	= extern( C ) void function( void*, const( char )* );
+alias BoundObjectGenerateCSharp	= string[] function();
 
 @CTypeName( "binderoo::BoundObject", "binderoo/boundobject.h" )
 struct BoundObject
@@ -66,6 +68,9 @@ struct BoundObject
 	BoundObjectDeserialise		deserialise;
 
 	Type						eType = Type.Undefined;
+
+	BoundObjectGenerateCSharp	generateCSharpVariables;
+	BoundObjectGenerateCSharp	generateCSharpTypeDecl;
 }
 //----------------------------------------------------------------------------
 
@@ -223,6 +228,52 @@ struct BoundObjectFunctions( Type )
 		{
 
 		}
+	}
+
+	static string[] generateCSharpTypeDecl()
+	{
+		import std.conv : to;
+		import binderoo.objectprivacy;
+		import binderoo.typedescriptor;
+
+		string[] strOutput;
+		static if( is( Type == struct ) )
+		{
+			strOutput ~= "[ StructLayout( LayoutKind.Explicit, Pack = " ~ Type.alignof.to!string ~ " ) ]";
+			strOutput ~= "public struct " ~ CSharpTypeString!Type;
+		}
+		else static if( is( Type == class ) )
+		{
+		}
+		return strOutput;
+	}
+
+	static string[] generateCSharpVariables()
+	{
+		import std.conv : to;
+		import binderoo.objectprivacy;
+		import binderoo.typedescriptor;
+
+		string[] strOutput;
+		static if( is( Type == struct ) )
+		{
+			static foreach( var; Type.tupleof )
+			{
+				strOutput ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
+								~ PrivacyOf!var
+								~ " "
+								~ CSharpFullTypeString!( typeof( var ) )
+								~ " "
+								~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : __traits( identifier, var ) )
+								//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
+								~ ";";
+			}
+		}
+		else static if( is( Type == class ) )
+		{
+		}
+
+		return strOutput;
 	}
 }
 //----------------------------------------------------------------------------

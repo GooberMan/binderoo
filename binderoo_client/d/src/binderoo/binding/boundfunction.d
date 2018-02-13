@@ -34,6 +34,114 @@ public import binderoo.slice;
 public import binderoo.typedescriptor;
 //----------------------------------------------------------------------------
 
+public import binderoo.functiondescriptor;
+
+alias StringGen = string function();
+alias StringArrayGen = string[] function();
+
+struct BoundFunctionFunctions( Descriptor )
+{
+	static string CPrototype()
+	{
+		return FunctionString!( Descriptor ).CDecl;
+	}
+
+	static string DPrototype()
+	{
+		return FunctionString!( Descriptor ).DDecl;
+	}
+
+	static string CSharpPrototype()
+	{
+		return FunctionString!( Descriptor ).CSharpDecl;
+	}
+
+	static string[] ParameterNames()
+	{
+		string[] generate()
+		{
+			string[] output;
+			static foreach( param; Descriptor.ParametersAsTuple )
+			{
+				output ~= param.Name;
+			}
+			return output;
+		}
+
+		enum Names = generate();
+
+		return Names;
+	}
+
+	static string[] CParameterTypes()
+	{
+		string[] generate()
+		{
+			string[] output;
+			static foreach( param; Descriptor.ParametersAsTuple )
+			{
+				output ~= TypeString!( param.Type ).CDecl;
+			}
+			return output;
+		}
+
+		enum Types = generate();
+
+		return Types;
+	}
+
+	static string[] DParameterTypes()
+	{
+		string[] generate()
+		{
+			string[] output;
+			static foreach( param; Descriptor.ParametersAsTuple )
+			{
+				output ~= TypeString!( param.Type ).DDecl;
+			}
+			return output;
+		}
+
+		enum Types = generate();
+
+		return Types;
+	}
+
+	static string[] CSharpParameterTypes()
+	{
+		string[] generate()
+		{
+			string[] output;
+			static foreach( param; Descriptor.ParametersAsTuple )
+			{
+				output ~= TypeString!( param.Type ).CSharpDecl;
+			}
+			return output;
+		}
+
+		enum Types = generate();
+
+		return Types;
+	}
+
+	static string[] CSharpParameterNamesWithQualifiers()
+	{
+		string[] generate()
+		{
+			string[] output;
+			static foreach( param; Descriptor.ParametersAsTuple )
+			{
+				output ~= ( param.IsRef ? "ref " : "" ) ~ param.Name;
+			}
+			return output;
+		}
+
+		enum Names = generate();
+
+		return Names;
+	}
+}
+
 @CTypeName( "binderoo::BoundFunction", "binderoo/boundfunction.h" )
 align( 16 )
 struct BoundFunction
@@ -86,10 +194,6 @@ struct BoundFunction
 
 	DString					strFunctionName;
 	DString					strFunctionSignature;
-	DString					strParameterNames;
-	DString					strCPrototype;
-	DString					strDPrototype;
-	DString					strCSharpPrototype;
 	DString					strOwningClass;
 	DString					strRequiredInclude;
 	Slice!( DString )		strIncludeVersions;
@@ -102,6 +206,15 @@ struct BoundFunction
 	CallingConvention		eCallingConvention;
 	FunctionKind			eFunctionKind;
 	Flags					eFlags;
+
+	StringGen				CPrototype;
+	StringGen				DPrototype;
+	StringGen				CSharpPrototype;
+	StringArrayGen			ParameterNames;
+	StringArrayGen			CParameterTypes;
+	StringArrayGen			DParameterTypes;
+	StringArrayGen			CSharpParameterTypes;
+	StringArrayGen			CSharpParameterNamesWithQualifiers;
 }
 //----------------------------------------------------------------------------
 
