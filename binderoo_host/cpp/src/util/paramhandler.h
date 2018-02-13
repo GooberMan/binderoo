@@ -381,6 +381,47 @@ private:
 };
 //----------------------------------------------------------------------------
 
+template< typename _returnTy, typename... _paramsTy >
+struct Invoker
+{
+	static void call( const char* pFunctionName, ParamHandler& parameters )
+	{
+		callInternal( pFunctionName, parameters, std::make_index_sequence< sizeof...( _paramsTy ) >{} );
+	}
+
+private:
+	typedef binderoo::ImportedFunction< binderoo::FunctionTraits< _returnTy(*)(_paramsTy...) > > ImportedFunc;
+
+	template< size_t... Ints >
+	static _returnTy callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >& /**/  )
+	{
+		ImportedFunc importedFunction( pFunctionName );
+		_returnTy val = importedFunction( parameters.getParam< _paramsTy >( Ints )... );
+		parameters.setReturn( val );
+		return val;
+	}
+};
+
+template< typename... _paramsTy >
+struct Invoker< void, _paramsTy... >
+{
+	static void call( const char* pFunctionName, ParamHandler& parameters )
+	{
+		callInternal( pFunctionName, parameters, std::make_index_sequence< sizeof...( _paramsTy ) >{} );
+	}
+
+private:
+	typedef binderoo::ImportedFunction< binderoo::FunctionTraits< void(*)(_paramsTy...) > > ImportedFunc;
+
+	template< size_t... Ints >
+	static void callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >& /**/ )
+	{
+		ImportedFunc importedFunction( pFunctionName );
+		importedFunction( parameters.getParam< _paramsTy >( Ints )... );
+	}
+};
+//----------------------------------------------------------------------------
+
 void handleFunction( const char* pFunctionName, ParamHandler& parameters );
 
 #endif //!defined( _BINDEROO_UTIL_PARAMHANDLER_H_ )
