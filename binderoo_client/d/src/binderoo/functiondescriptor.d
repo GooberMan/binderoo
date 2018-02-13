@@ -160,6 +160,10 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 	alias					Name					= FunctionName;
 	//------------------------------------------------------------------------
 
+	enum					ModuleName				= binderoo.traits.ModuleName!( symbol );
+	enum					FullyQualifiedName		= FullTypeName!( symbol );
+	//------------------------------------------------------------------------
+
 	private alias			ReturnDescriptor		= TypeDescriptor!( std.traits.ReturnType!( symbol ), ReturnsRef );
 
 	// Function details. First, the return type.
@@ -192,6 +196,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 		alias				UnqualifiedType			= Descriptor.UnqualifiedType;
 		enum				IsConst					= Descriptor.IsConst;
 		enum				IsRef					= Descriptor.IsRef;
+		enum				IsPointer				= Descriptor.IsPointer;
 	}
 	//------------------------------------------------------------------------
 
@@ -338,6 +343,10 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 	alias					Name					= FunctionName;
 	//------------------------------------------------------------------------
 
+	enum					ModuleName				= binderoo.traits.ModuleName!( T );
+	enum					FullyQualifiedName		= FullTypeName!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
+	//------------------------------------------------------------------------
+
 	private alias			ReturnDescriptor		= TypeDescriptor!( std.traits.ReturnType!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ), ReturnsRef );
 
 	// Function details. First, the return type.
@@ -370,6 +379,7 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 		alias				UnqualifiedType			= Descriptor.UnqualifiedType;
 		enum				IsConst					= Descriptor.IsConst;
 		enum				IsRef					= Descriptor.IsRef;
+		enum				IsPointer				= Descriptor.IsPointer;
 	}
 	//------------------------------------------------------------------------
 
@@ -424,7 +434,7 @@ template FunctionDescriptors( T, CollectionOrder Order = DefaultCollectionOrder 
 	{
 		static if( IsAccessible!( T, name ) )
 		{
-			enum isMemberFunction = std.traits.isSomeFunction!( __traits( getMember, T, name ) );
+			enum isMemberFunction = __traits( getOverloads, T, name ).length > 0;
 		}
 		else
 		{
@@ -472,14 +482,14 @@ template FunctionDescriptors( T, CollectionOrder Order = DefaultCollectionOrder 
 		{
 			foreach_reverse( iIndex, Overload; Overloads )
 			{
-				strOutputs ~= "FunctionDescriptor!( " ~ fullyQualifiedName!( T ) ~ ", \"" ~ name ~ "\", " ~ to!string( iIndex ) ~ " )";
+				strOutputs ~= "FunctionDescriptor!( " ~ FullyQualifiedName!( T ) ~ ", \"" ~ name ~ "\", " ~ to!string( iIndex ) ~ " )";
 			}
 		}
 		else
 		{
 			foreach( iIndex, Overload; Overloads )
 			{
-				strOutputs ~= "FunctionDescriptor!( " ~ fullyQualifiedName!( T ) ~ ", \"" ~ name ~ "\", " ~ to!string( iIndex ) ~ " )";
+				strOutputs ~= "FunctionDescriptor!( " ~ FullyQualifiedName!( T ) ~ ", \"" ~ name ~ "\", " ~ to!string( iIndex ) ~ " )";
 			}
 		}
 
@@ -602,7 +612,16 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 			return parameterTypes.joinWith( ", " );
 		}
 
-		return TypeString!( ReturnDescriptor ).CDecl ~ "(" ~ generateParameterString() ~ ")" ~ ConstString;
+		static if( Desc.IsStatic || !Desc.IsMemberFunction )
+		{
+			string strPtrType = "(*)";
+		}
+		else
+		{
+			string strPtrType = "(" ~ TypeString!( Desc.ObjectType ).CDecl ~ "::*)";
+		}
+
+		return TypeString!( ReturnDescriptor ).CDecl ~ strPtrType ~ "(" ~ generateParameterString() ~ ")" ~ ConstString;
 	}
 	//------------------------------------------------------------------------
 
