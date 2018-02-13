@@ -393,7 +393,7 @@ private:
 	typedef binderoo::ImportedFunction< binderoo::FunctionTraits< _returnTy(*)(_paramsTy...) > > ImportedFunc;
 
 	template< size_t... Ints >
-	static _returnTy callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >& /**/  )
+	static _returnTy callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >&& /**/  )
 	{
 		ImportedFunc importedFunction( pFunctionName );
 		_returnTy val = importedFunction( parameters.getParam< _paramsTy >( Ints )... );
@@ -414,7 +414,7 @@ private:
 	typedef binderoo::ImportedFunction< binderoo::FunctionTraits< void(*)(_paramsTy...) > > ImportedFunc;
 
 	template< size_t... Ints >
-	static void callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >& /**/ )
+	static void callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >&& /**/ )
 	{
 		ImportedFunc importedFunction( pFunctionName );
 		importedFunction( parameters.getParam< _paramsTy >( Ints )... );
