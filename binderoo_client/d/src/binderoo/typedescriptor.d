@@ -202,6 +202,16 @@ enum CTypeNameOverride( T : bool )			= "bool"; // Returns char otherwise when pa
 
 enum CSharpTypeNameOverride( T : char )		= "byte";
 enum CSharpTypeNameOverride( T : wchar ) 	= "char";
+enum CSharpTypeNameOverride( T : byte )		= "sbyte";
+enum CSharpTypeNameOverride( T : ubyte )	= "byte";
+enum CSharpTypeNameOverride( T : short )	= "short";
+enum CSharpTypeNameOverride( T : ushort )	= "ushort";
+enum CSharpTypeNameOverride( T : int )		= "int";
+enum CSharpTypeNameOverride( T : uint )		= "uint";
+enum CSharpTypeNameOverride( T : long )		= "long";
+enum CSharpTypeNameOverride( T : ulong )	= "ulong";
+version( Windows ) enum CSharpTypeNameOverride( T : wchar )	= "char";
+else enum CSharpTypeNameOverride( T : wchar ) = "uint";
 //----------------------------------------------------------------------------
 
 template CTypeString( T )
@@ -287,7 +297,11 @@ template CSharpTypeString( T )
 {
 	static if( IsConst!( T ) || IsImmutable!( T ) )
 	{
-		enum CSharpTypeString = "const " ~ CSharpTypeString!( Unqual!( T ) );
+		enum CSharpTypeString = CSharpTypeString!( Unqual!( T ) );
+	}
+	else static if( IsPointer!( T ) )
+	{
+		enum CSharpTypeString = "IntPtr"; //CSharpTypeString!( binderoo.traits.PointerTarget!( T ) ) ~ "*";
 	}
 	else static if( CSharpTypeNameOverride!( T ) != TypeNameUndefined )
 	{
@@ -309,6 +323,8 @@ template CSharpTypeString( T )
 		enum CSharpTypeString = T.stringof;
 	}
 }
+
+enum CSharpFullTypeString( T ) = FullTypeName!T[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!T;
 
 struct TypeString( T, bool bIsRef = false )
 {
