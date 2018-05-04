@@ -248,6 +248,25 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
+		BIND_INLINE std::ptrdiff_t		addReferenceInstance()
+		{
+			if( isAcquired() )
+			{
+				return ++pRefCountedInstance->iRefCount;
+			}
+			
+			return 0;
+		}
+		//--------------------------------------------------------------------
+
+		BIND_INLINE std::ptrdiff_t		releaseInstance()
+		{
+			unacquire();
+
+			return getRefCount();
+		}
+		//--------------------------------------------------------------------
+
 		BIND_INLINE bool				isAcquired() const						{ return pRefCountedInstance != nullptr; }
 		BIND_INLINE std::ptrdiff_t		getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount : 0; }
 		BIND_INLINE _ty* const			operator->()							{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
@@ -413,10 +432,17 @@ namespace binderoo
 BIND_C_API_BEGIN
 	typedef void* binderoo_imported_function_t;
 	typedef void* binderoo_func_ptr_t;
+	typedef void* binderoo_imported_class_t;
+	typedef void* binderoo_class_ptr_t;
 
 	binderoo_imported_function_t	BIND_DLL binderoo_host_create_imported_function( char* pName, char* pSignature );
 	void							BIND_DLL binderoo_host_destroy_imported_function( binderoo_imported_function_t pFunc );
 	binderoo_func_ptr_t				BIND_DLL binderoo_host_get_function_ptr( binderoo_imported_function_t pFunc );
+
+	binderoo_imported_class_t		BIND_DLL binderoo_host_create_imported_class( char* pName );
+	void							BIND_DLL binderoo_host_addref_imported_class( binderoo_imported_class_t pObj );
+	void							BIND_DLL binderoo_host_release_imported_class( binderoo_imported_class_t pObj );
+	binderoo_class_ptr_t			BIND_DLL binderoo_host_get_class_ptr( binderoo_imported_class_t pObj );
 BIND_C_API_END
 //----------------------------------------------------------------------------
 

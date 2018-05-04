@@ -69,9 +69,16 @@ typedef binderoo::Containers< binderoo::AllocatorSpace::Host >::InternalString I
 
 struct Host_Function_C
 {
-	InternalString							m_strName;
-	binderoo::ImportedFunction< void >*		m_pFunc;
-	size_t									m_uRefCount;
+	InternalString										m_strName;
+	binderoo::ImportedFunction< void >*					m_pFunc;
+	size_t												m_uRefCount;
+};
+//----------------------------------------------------------------------------
+
+struct Host_Class_C
+{
+	InternalString										m_strName;
+	binderoo::RefCountedImportedClassInstance< void > 	m_pObj;
 };
 //----------------------------------------------------------------------------
 
@@ -116,6 +123,37 @@ binderoo_func_ptr_t binderoo_host_get_function_ptr( binderoo_imported_function_t
 	Host_Function_C* pThisFunc = (Host_Function_C*)pFunc;
 
 	return pThisFunc->m_pFunc->getFuncPtr();
+}
+//----------------------------------------------------------------------------
+
+binderoo_imported_class_t binderoo_host_create_imported_class( char* pName )
+{
+	InternalString strName( pName );
+
+	Host_Class_C* pNewClass = new Host_Class_C { pName };
+	pNewClass->m_pObj.createNewInstance( strName.c_str() );
+	return pNewClass;
+}
+//----------------------------------------------------------------------------
+
+void binderoo_host_addref_imported_class( binderoo_imported_class_t pClass )
+{
+	((Host_Class_C*)pClass)->m_pObj.addReferenceInstance();
+}
+//----------------------------------------------------------------------------
+
+void binderoo_host_release_imported_class( binderoo_imported_class_t pClass )
+{
+	if( ((Host_Class_C*)pClass)->m_pObj.releaseInstance() == 0 )
+	{
+		delete (Host_Class_C*)pClass;
+	}
+}
+//----------------------------------------------------------------------------
+
+binderoo_class_ptr_t binderoo_host_get_class_ptr( binderoo_imported_class_t pClass )
+{
+	return ((Host_Class_C*)pClass)->m_pObj.get();
 }
 //----------------------------------------------------------------------------
 

@@ -1454,18 +1454,27 @@ static void* BIND_C_CALL host_c_realloc( void* pObj, size_t newObjSize, size_t a
 static void BIND_C_CALL host_c_log_info( const char* pMessage )
 {
 	fprintf( stdout, "%s\n", pMessage );
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
+	OutputDebugString( pMessage );
+#endif 
 }
 //----------------------------------------------------------------------------
 
 static void BIND_C_CALL host_c_log_warning( const char* pMessage )
 {
 	fprintf( stdout, TERMINAL_BOLDON TERMINAL_FOREGROUND256( 220 ) "WARNING:" TERMINAL_RESET " %s\n", pMessage );
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
+	OutputDebugString( pMessage );
+#endif 
 }
 //----------------------------------------------------------------------------
 
 static void BIND_C_CALL host_c_log_error( const char* pMessage )
 {
 	fprintf( stderr, TERMINAL_BOLDON TERMINAL_FOREGROUND256( 15 ) TERMINAL_BACKGROUND256( 160 ) "ERROR:" TERMINAL_RESET " %s\n", pMessage );
+#if BIND_SYSAPI == BIND_SYSAPI_WINAPI || BIND_SYSAPI == BIND_SYSAPI_UWP
+	OutputDebugString( pMessage );
+#endif 
 }
 //----------------------------------------------------------------------------
 
