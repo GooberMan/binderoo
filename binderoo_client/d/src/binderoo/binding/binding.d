@@ -32,6 +32,7 @@ module binderoo.binding.binding;
 
 public import binderoo.binding.attributes;
 public import binderoo.binding.functionstub;
+public import binderoo.binding.boundenum;
 public import binderoo.binding.boundfunction;
 public import binderoo.binding.boundobject;
 public import binderoo.binding.boundmodule;
@@ -61,19 +62,22 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 		string thisModuleName = ModuleName!initialiseModuleBinding;
 
 		auto currModule = generateModuleInfo();
-		auto theseFunctionsToImport = generateImports!( Type )();
-		auto theseFunctionsToExport = generateExports!( Type )();
-		auto theseObjectsToExport = generateObjects!( Type )();
+		auto theseFunctionsToImport = generateFunctionImports!( Type )();
+		auto theseFunctionsToExport = generateFunctionExports!( Type )();
+		auto theseObjectsToExport = generateObjectExports!( Type )();
+		auto theseEnumsToExport = generateEnumExports!( Type )();
 
 		registerModule( currModule );
 		registerImportFunctions( theseFunctionsToImport );
 		registerExportedFunctions( theseFunctionsToExport );
 		registerExportedObjects( theseObjectsToExport );
+		registerExportedEnums( theseEnumsToExport );
 
 		thisModule = currModule;
 		functionsToImport = theseFunctionsToImport;
 		functionsToExport = theseFunctionsToExport;
 		objectsToExport = theseObjectsToExport;
+		enumsToExport = theseEnumsToExport;
 	}
 	//------------------------------------------------------------------------
 
@@ -90,19 +94,22 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 //		writeln( "Initialising ", ThisModuleName, " bindings..." );
 
 		auto currModule = generateModuleInfo();
-		auto theseFunctionsToImport = generateImports();
-		auto theseFunctionsToExport = generateExports();
-		auto theseObjectsToExport = generateObjects();
+		auto theseFunctionsToImport = generateFunctionImports();
+		auto theseFunctionsToExport = generateFunctionExports();
+		auto theseObjectsToExport = generateObjectExports();
+		auto theseEnumsToExport = generateEnumExports();
 
 		registerModule( currModule );
 		registerImportFunctions( theseFunctionsToImport );
 		registerExportedFunctions( theseFunctionsToExport );
 		registerExportedObjects( theseObjectsToExport );
+		registerExportedEnums( theseEnumsToExport );
 
 		thisModule = currModule;
 		functionsToImport = theseFunctionsToImport;
 		functionsToExport = theseFunctionsToExport;
 		objectsToExport = theseObjectsToExport;
+		enumsToExport = theseEnumsToExport;
 	}
 	//------------------------------------------------------------------------
 
@@ -130,6 +137,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 	__gshared BoundObject[]							objectsToExport;
 	__gshared BoundFunction[]						functionsToImport;
 	__gshared BoundFunction[]						functionsToExport;
+	__gshared BoundEnum[]							enumsToExport;
 	//------------------------------------------------------------------------
 
 	template ModuleTypeDescriptors( ParentClass, Aliases... )
@@ -172,6 +180,46 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 	}
 	//------------------------------------------------------------------------
 
+	template ModuleEnumDescriptors( ParentClass, Aliases... )
+	{
+		import std.typetuple;
+
+		string makeATuple()
+		{
+			import std.conv : to;
+			import binderoo.traits : IsUserType, IsSomeType, joinWith;
+
+			string[] indices;
+			foreach( Alias; Aliases )
+			{
+				static if( !is( ParentClass == void ) )
+				{
+					enum AliasString = FullTypeName!( ParentClass ) ~ "." ~ Alias;
+				}
+				else
+				{
+					enum AliasString = Alias;
+				}
+
+				static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
+				{
+					mixin( "alias Type = " ~ AliasString ~ ";" );
+					mixin( "import " ~ ModuleName!( Type ) ~ ";" );
+
+					static if( IsEnum!( Type ) && IsIntegral!( OriginalType!Type ) && Alias == Type.stringof )
+					{
+						indices ~= AliasString;
+					}
+				}
+			}
+
+			return "alias ModuleEnumDescriptors = TypeTuple!( " ~ indices.joinWith( ", " ) ~ " );";
+		}
+
+		mixin( makeATuple() );
+	}
+	//------------------------------------------------------------------------
+
 	BoundModule generateModuleInfo( ObjectTypes... )()
 	{
 		DString[] gatherFor( Types... )()
@@ -208,41 +256,49 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 	}
 	//------------------------------------------------------------------------
 
-	BoundObject[] generateObjects( ObjectTypes... )()
+	BoundObject[] generateObjectExports( ObjectTypes... )()
 	{
 		BoundObject[] gatherFor( bool bRecursive, Types... )()
 		{
 			BoundObject[] objects;
 			foreach( Type; Types )
 			{
-				static if( is( Type == class ) )
+				static if ( Type.stringof == "Monitor" || Type.stringof == "Object" )
 				{
-					foreach( m; __traits( allMembers, Type ) )
+					//pragma( msg, "Not grabbing object " ~ Type.stringof );
+				}
+				else
+				{
+					//pragma( msg, "Grabbing object " ~ Type.stringof );
+					/+static if( is( Type == class ) )
 					{
-						pragma( msg, m );
+						foreach( m; __traits( allMembers, Type ) )
+						{
+							pragma( msg, m );
+						}
+					}+/
+					static if( ( is( Type == struct ) || is( Type == class ) )
+								&& !HasUDA!( Type, BindNoExportObject ) )
+					{
+						alias TheseFunctions = BoundObjectFunctions!( Type );
+						objects ~= BoundObject( DString( FullTypeName!( Type ) ),
+												fnv1a_64( FullTypeName!( Type ) ),
+												&TheseFunctions.allocObj,
+												&TheseFunctions.deallocObj,
+												&TheseFunctions.thunkObj,
+												&TheseFunctions.serialiseObj,
+												&TheseFunctions.deserialiseObj,
+												TheseFunctions.TypeVal,
+												&TheseFunctions.generateCSharpVariables,
+												&TheseFunctions.generateCSharpTypeDecl );
 					}
-				}
-				static if( ( is( Type == struct ) || is( Type == class ) )
-							&& !HasUDA!( Type, BindNoExportObject ) )
-				{
-					alias TheseFunctions = BoundObjectFunctions!( Type );
-					objects ~= BoundObject( DString( FullTypeName!( Type ) ),
-											fnv1a_64( FullTypeName!( Type ) ),
-											&TheseFunctions.allocObj,
-											&TheseFunctions.deallocObj,
-											&TheseFunctions.thunkObj,
-											&TheseFunctions.serialiseObj,
-											&TheseFunctions.deserialiseObj,
-											TheseFunctions.TypeVal,
-											&TheseFunctions.generateCSharpVariables,
-											&TheseFunctions.generateCSharpTypeDecl );
-				}
 
-				static if( bRecursive )
-				{
-					alias AllSubTypes = ModuleTypeDescriptors!( Type, __traits( allMembers, Type ) );
+					static if( bRecursive )
+					{
+						alias AllSubTypes = ModuleTypeDescriptors!( Type, __traits( allMembers, Type ) );
 
-					objects ~= gatherFor!( bRecursive, AllSubTypes )();
+						objects ~= gatherFor!( bRecursive, AllSubTypes )();
+					}
 				}
 			}
 
@@ -262,7 +318,66 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 	}
 	//------------------------------------------------------------------------
 
-	BoundFunction[] generateImports( ImportTypes... )()
+	BoundEnum[] generateEnumExports( ExportTypes... )()
+	{
+		BoundEnum[] gatherFor( Types... )()
+		{
+			BoundEnum[] enums;
+
+			foreach( Type; Types )
+			{
+				import std.traits : OriginalType;
+				import std.conv : to;
+
+				alias ThisTypeString = TypeString!( OriginalType!Type );
+
+				//pragma( msg, "Enum " ~ FullTypeName!Type );
+				//pragma( msg, " -> D type: " ~ ThisTypeString.DDecl );
+				//pragma( msg, " -> C type: " ~ ThisTypeString.CDecl );
+				//pragma( msg, " -> C# type: " ~ ThisTypeString.CSharpDecl );
+
+				BoundEnum newEnum;
+				newEnum.strName = DString( FullTypeName!Type );
+				newEnum.strUnderlyingTypeD = DString( ThisTypeString.DDecl );
+				newEnum.strUnderlyingTypeC = DString( ThisTypeString.CDecl );
+				newEnum.strUnderlyingTypeCSharp = DString( ThisTypeString.CSharpDecl );
+
+				EnumValueInfo[] values;
+
+				foreach( EnumValue; __traits( allMembers, Type ) )
+				{
+					mixin( "enum Val = cast( OriginalType!Type )" ~ FullTypeName!Type ~ "." ~ EnumValue ~ ";" );
+					//pragma( msg, " -> " ~ EnumValue ~ " = " ~ Val.to!string );
+
+					EnumValueInfo newInfo;
+					newInfo.strIdentifier = DString( EnumValue );
+					newInfo.strValue = DString( Val.to!string );
+
+					values ~= newInfo;
+				}
+
+				newEnum.vecAllValues = Slice!EnumValueInfo( values );
+
+				enums ~= newEnum;
+			}
+
+			return enums;
+		}
+
+		static if( ExportTypes.length == 0 )
+		{
+			alias ModuleEnums = ModuleEnumDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
+		}
+		else
+		{
+			alias ModuleEnums = ModuleEnumDescriptors!( void, ExportTypes[ 0 ].stringof );
+		}
+
+		return gatherFor!ModuleEnums;
+	}
+	//------------------------------------------------------------------------
+
+	BoundFunction[] generateFunctionImports( ImportTypes... )()
 	{
 		BoundFunction.FunctionKind convert( BindRawImport.FunctionKind eKind )
 		{
@@ -381,7 +496,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 		}
 	}
 
-	BoundFunction[] generateExports( ExportTypes... )()
+	BoundFunction[] generateFunctionExports( ExportTypes... )()
 	{
 		string FunctionGeneratorGlobal( alias Desc )()
 		{
@@ -443,11 +558,19 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 				string[] strParameters;
 				string[] strParameterNames;
-				strParameters ~= Desc.ObjectType.stringof ~ "* pThis";
+				static if( is( Desc.ObjectType == class ) )
+				{
+					strParameters ~= Desc.ObjectType.stringof ~ " pThis";				
+				}
+				else
+				{
+					strParameters ~= Desc.ObjectType.stringof ~ "* pThis";
+				}
 				strParameterNames ~= "pThis";
 				static foreach( Param; Desc.ParametersAsTuple )
 				{
 					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
+					strParameterNames ~= Param.Name;
 				}
 
 				strOutput ~= strParameters.joinWith( ", " );
@@ -481,6 +604,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 		BoundFunction[] functionGrabber( int IntroducedVersion, alias Scope, Symbols... )()
 		{
+			//pragma( msg, "Processing " ~ Scope.stringof ~ " for exports" );
 			enum ExportAllFound = IntroducedVersion != BindExport.iIntroducedVersion.init;
 			enum ScopeIsAggregate = IsAggregateType!Scope;
 
@@ -489,62 +613,64 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 			void handleFunction( alias Descriptor )( int iIntroducedVersion )
 			{
 				//static assert( Descriptor.IsCPlusPlusFunction, FullTypeName!( CurrFuncSymbol ) ~ " can only be exported as extern( C++ ) for now." );
-
-				void* pFunction;
-
-				static if( Descriptor.IsCPlusPlusFunction )
+				static if( Descriptor.IsImplementedInType )
 				{
-					//alias Descriptor = OriginalDescriptor;
-					mixin( "pFunction = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+					void* pFunction;
+
+					static if( Descriptor.IsCPlusPlusFunction )
+					{
+						//alias Descriptor = OriginalDescriptor;
+						mixin( "pFunction = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+					}
+					else
+					{
+						alias NewFunc = CPPFunctionGenerator!Descriptor;
+
+						//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
+						mixin( "pFunction = &NewFunc." ~ Descriptor.Name ~ ";" );
+					}
+
+					enum FullName		= Descriptor.FullyQualifiedName;
+					enum Signature		= FunctionString!( Descriptor ).CSignature;
+					enum DDecl			= FunctionString!( Descriptor ).DDecl;
+					enum CDecl			= FunctionString!( Descriptor ).CDecl;
+					enum CSharpDecl		= FunctionString!( Descriptor ).CSharpDecl;
+					enum ParameterNames	= FunctionString!( Descriptor ).ParameterNames;
+
+					//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
+					//pragma( msg, " -> Parameter names: " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
+					//pragma( msg, " -> C Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CPrototype() );
+					//pragma( msg, " -> Parameter types (C): " ~ BoundFunctionFunctions!( Descriptor ).CParameterTypes().joinWith( ", " ) );
+					//pragma( msg, " -> D Declaration: " ~ BoundFunctionFunctions!( Descriptor ).DPrototype() );
+					//pragma( msg, " -> Parameter types (D): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
+					//pragma( msg, " -> C# Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpPrototype() );
+					//pragma( msg, " -> Parameter types (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes().joinWith( ", " ) );
+					//pragma( msg, " -> Parameter call (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers().joinWith( ", " ) );
+
+					foundExports ~= BoundFunction( DString( FullName )
+													, DString( Signature )
+													, DString( "" )
+													, DString( "" )
+													, Slice!DString.init
+													, Slice!DString.init
+													, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
+													, pFunction
+													, iIntroducedVersion
+													, 0
+													, BoundFunction.Resolution.Exported
+													, BoundFunction.CallingConvention.CPP
+													, Descriptor.IsStatic ? BoundFunction.FunctionKind.Static : BoundFunction.FunctionKind.Method
+													, BoundFunction.Flags.None
+													, &BoundFunctionFunctions!( Descriptor ).CPrototype
+													, &BoundFunctionFunctions!( Descriptor ).DPrototype
+													, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
+													, &BoundFunctionFunctions!( Descriptor ).ParameterNames
+													, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
+												);
 				}
-				else
-				{
-					alias NewFunc = CPPFunctionGenerator!Descriptor;
-
-					//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
-					mixin( "pFunction = &NewFunc." ~ Descriptor.Name ~ ";" );
-				}
-
-				enum FullName		= Descriptor.FullyQualifiedName;
-				enum Signature		= FunctionString!( Descriptor ).CSignature;
-				enum DDecl			= FunctionString!( Descriptor ).DDecl;
-				enum CDecl			= FunctionString!( Descriptor ).CDecl;
-				enum CSharpDecl		= FunctionString!( Descriptor ).CSharpDecl;
-				enum ParameterNames	= FunctionString!( Descriptor ).ParameterNames;
-
-				//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
-				//pragma( msg, " -> Parameter names: " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
-				//pragma( msg, " -> C Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CPrototype() );
-				//pragma( msg, " -> Parameter types (C): " ~ BoundFunctionFunctions!( Descriptor ).CParameterTypes().joinWith( ", " ) );
-				//pragma( msg, " -> D Declaration: " ~ BoundFunctionFunctions!( Descriptor ).DPrototype() );
-				//pragma( msg, " -> Parameter types (D): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
-				//pragma( msg, " -> C# Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpPrototype() );
-				//pragma( msg, " -> Parameter types (C#): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
-				//pragma( msg, " -> Parameter call (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers().joinWith( ", " ) );
-
-				foundExports ~= BoundFunction( DString( FullName )
-												, DString( Signature )
-												, DString( "" )
-												, DString( "" )
-												, Slice!DString.init
-												, Slice!DString.init
-												, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
-												, pFunction
-												, iIntroducedVersion
-												, 0
-												, BoundFunction.Resolution.Exported
-												, BoundFunction.CallingConvention.CPP
-												, Descriptor.IsStatic ? BoundFunction.FunctionKind.Static : BoundFunction.FunctionKind.Method
-												, BoundFunction.Flags.None
-												, &BoundFunctionFunctions!( Descriptor ).CPrototype
-												, &BoundFunctionFunctions!( Descriptor ).DPrototype
-												, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
-												, &BoundFunctionFunctions!( Descriptor ).ParameterNames
-												, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
-												, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
-												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
-												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
-											);
 			}
 
 			foreach( SymbolName; Symbols )
@@ -570,49 +696,57 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 					enum IsAggregate = false;
 				}
 
-				static if( NumOverloads > 0 )
+				static if( SymbolName == "Monitor"
+							|| SymbolName == "Object" )
 				{
-					static if( ExportAllFound )
+					//pragma( msg, "Skipping " ~ Scope.stringof ~ "." ~ SymbolName ~ "..." );
+				}
+				else
+				{
+					static if( NumOverloads > 0 )
 					{
-						enum ExportData = BindExport( IntroducedVersion, -1 );
-					}
-					else
-					{
-						alias ExportData = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
-					}
-
-					static if( !is( ExportData : void ) )
-					{
-						static foreach( iIndex, CurrFuncSymbol; __traits( getOverloads, Scope, SymbolName ) )
+						static if( ExportAllFound )
 						{
-							static if( !ScopeIsAggregate )
+							enum ExportData = BindExport( IntroducedVersion, -1 );
+						}
+						else
+						{
+							alias ExportData = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
+						}
+
+						static if( !is( ExportData : void ) )
+						{
+							static foreach( iIndex, CurrFuncSymbol; __traits( getOverloads, Scope, SymbolName ) )
 							{
-								handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
-							}
-							else
-							{
-								handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
+								static if( !ScopeIsAggregate )
+								{
+									handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
+								}
+								else
+								{
+									handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
+								}
 							}
 						}
 					}
-				}
-				else static if( IsAggregate )
-				{
-					mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
+					else static if( IsAggregate )
+					{
+						mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
 
-					static if( ExportAllFound )
-					{
-						enum UDA = BindExport( IntroducedVersion, -1 );
-					}
-					else
-					{
-						alias UDA = GetUDA!( Symbol, BindExport );
-					}
+						static if( ExportAllFound )
+						{
+							enum UDA = BindExport( IntroducedVersion, -1 );
+						}
+						else
+						{
+							alias UDA = GetUDA!( Symbol, BindExport );
+						}
 
-					static if( !is( UDA : void ) )
-					{
-						enum NewIntroducedVersion = UDA.iIntroducedVersion;
-						foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
+						static if( !is( UDA : void ) )
+						{
+							enum NewIntroducedVersion = UDA.iIntroducedVersion;
+							foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
+						}
 					}
 				}
 			}
@@ -683,6 +817,12 @@ public void registerExportedObjects( BoundObject[] exports )
 		exportObjects ~= forExport;
 		exportObjectIndices[ forExport.uFullyQualifiedNameHash ] = uIndex;
 	}
+}
+//----------------------------------------------------------------------------
+
+public void registerExportedEnums( BoundEnum[] exports )
+{
+	exportEnums ~= exports;
 }
 //----------------------------------------------------------------------------
 
@@ -893,6 +1033,8 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 	import std.array : split;
 	import std.conv : to;
 
+	import std.array : replace;
+
 	class CSharpObject
 	{
 		enum Type : int
@@ -901,20 +1043,25 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			Namespace = 0,
 			StaticClass = 1,
 			Struct = 2,
+			Class = 3,
+			Enum = 4,
 		}
 
-		this( Type t, string n = "root", CSharpObject p = null )
+		this( Type t, string n = "root", string f = "root", CSharpObject p = null )
 		{
 			eType = t;
 			strName = n;
+			strFullName = f;
 			parent = p;
 		}
 
 		Type						eType;
 		string 						strName;
+		string						strFullName;
 		string[]					strTypeDecl;
 		string[]					strVariables;
 		BoundFunction*[]			arrFunctions;
+		BoundEnum*					pThisEnum;
 		CSharpObject[ string ]		subTypes;
 		CSharpObject				parent;
 	}
@@ -933,6 +1080,65 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		return strTabs;
 	}
 
+	string getFunctionPointerName( BoundFunction* func, size_t iIndex )
+	{
+		return "F_" ~ ( cast(string)func.strFunctionName ).replace( ".", "_" ) ~ iIndex.to!string;
+	}
+
+	string getDelegateTypeName( BoundFunction* func, size_t iIndex )
+	{
+		return "D_" ~ ( cast(string)func.strFunctionName ).replace( ".", "" ) ~ iIndex.to!string;
+	}
+
+	string getPropertyName( BoundFunction* func, size_t iIndex )
+	{
+		return ( cast(string)func.strFunctionName ).replace( ".", "_" ) ~ iIndex.to!string;
+	}
+
+	string[] generateCSharpFunctionPointer( CSharpObject thisObj, BoundFunction* func, size_t iIndex, int depth )
+	{
+		bool bMemberFunc = func.eFunctionKind != BoundFunction.FunctionKind.Static;
+		string[] strParameterNames = func.CSharpParameterNamesWithQualifiers();
+
+		string strObjTabs = generateTabs( depth );
+		string strContentTabs = strObjTabs ~ '\t';
+
+		string strImportedFuncVarName = getFunctionPointerName( func, iIndex );
+		string strDelegateType = getDelegateTypeName( func, iIndex );
+		string strPropertyName = getPropertyName( func, iIndex );
+
+		string[] strSplitApart = (cast(string)func.strFunctionSignature).split( '(' );
+		string strReturnType = strSplitApart[ 0 ];
+
+		strSplitApart = func.CSharpPrototype().split( '(' );
+		string strParameters = "(";
+		if( bMemberFunc )
+		{
+			if( thisObj.eType == CSharpObject.Type.Struct )
+			{
+				strParameters ~= " ref " ~ thisObj.strFullName ~ " pThis" ~ (strParameterNames.length > 0 ? "," : "");
+			}
+			else
+			{
+				strParameters ~= " IntPtr pThis" ~ (strParameterNames.length > 0 ? "," : "");
+			}
+		}
+		strParameters ~= strSplitApart[ 1 ];
+
+		string[] lines;
+
+		lines ~= strObjTabs ~ "// Function " ~ cast(string)func.strFunctionName;
+		lines ~= strObjTabs ~ "public static ImportedFunction " ~ strImportedFuncVarName ~ ";";
+		lines ~= strObjTabs ~ "public delegate " ~ strReturnType ~ " " ~ strDelegateType ~ strParameters ~ ";";
+		lines ~= strObjTabs ~ "public static " ~ strDelegateType ~ " " ~ strPropertyName;
+		lines ~= strObjTabs ~ "{ get {";
+		lines ~= strContentTabs ~ "if( " ~ strImportedFuncVarName ~ " == null ) " ~ strImportedFuncVarName ~ " = new ImportedFunction( \"" ~ cast(string)func.strFunctionName ~ "\", \"" ~ cast(string)func.strFunctionSignature ~ "\" );";
+		lines ~= strContentTabs ~ "return (" ~ strDelegateType ~ ")Marshal.GetDelegateForFunctionPointer( " ~ strImportedFuncVarName ~ ".FuncPtr, typeof( " ~ strDelegateType ~ " ) );";
+		lines ~= strObjTabs ~ "} }";
+
+		return lines;
+	}
+
 	string[] generateCSharpForFunction( CSharpObject thisObj, BoundFunction* func, size_t iIndex, int depth )
 	{
 		bool bMemberFunc = func.eFunctionKind != BoundFunction.FunctionKind.Static;
@@ -942,40 +1148,72 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 		string strObjTabs = generateTabs( depth );
 		string strContentTabs = strObjTabs ~ '\t';
-		string strFuncName = ( cast(string)func.strFunctionName ).split( "." )[ $ - 1 ];
-		string strImportedFuncVarName = "func_" ~ strFuncName ~ iIndex.to!string;
-		string strDelegateType = "Delegate" ~ strFuncName ~ iIndex.to!string;
+
+		string strPropertyName = getPropertyName( func, iIndex );
 
 		string[] strSplitApart = (cast(string)func.strFunctionSignature).split( '(' );
 		string strReturnType = strSplitApart[ 0 ];
 
-		strSplitApart = func.CSharpPrototype().split( '(' );
-		string strParameters = "(";
 		if( bMemberFunc )
 		{
-			strParameters ~= " ref " ~ thisObj.strName ~ " pThis" ~ (strParameterNames.length > 0 ? "," : "");
-			strParameterNames = [ "ref this" ] ~ strParameterNames;
+			if( thisObj.eType == CSharpObject.Type.Struct )
+			{
+				strParameterNames = [ "ref this" ] ~ strParameterNames;
+			}
+			else
+			{
+				strParameterNames = [ "pObj.Ptr" ] ~ strParameterNames;
+			}
 		}
-		strParameters ~= strSplitApart[ 1 ];
 
-		lines ~= strObjTabs ~ "// Function " ~ cast(string)func.strFunctionName;
-		lines ~= strObjTabs ~ "private static ImportedFunction " ~ strImportedFuncVarName ~ ";";
-		lines ~= strObjTabs ~ "private delegate " ~ strReturnType ~ " " ~ strDelegateType ~ strParameters ~ ";";
 		lines ~= strObjTabs ~ "public " ~ func.CSharpPrototype();
 		lines ~= strObjTabs ~ "{";
-		lines ~= strContentTabs ~ "if( " ~ strImportedFuncVarName ~ " == null ) " ~ strImportedFuncVarName ~ " = new ImportedFunction( \"" ~ cast(string)func.strFunctionName ~ "\", \"" ~ cast(string)func.strFunctionSignature ~ "\" );";
-		lines ~= strContentTabs ~ strDelegateType ~ " call = (" ~ strDelegateType ~ ")Marshal.GetDelegateForFunctionPointer( " ~ strImportedFuncVarName ~ ".FuncPtr, typeof( " ~ strDelegateType ~ " ) );";
 		if( strReturnType == "void" )
 		{
-			lines ~= strContentTabs ~ "call( " ~ strParameterNames.joinWith( ", " ) ~ " );";
+			lines ~= strContentTabs ~ "binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
 		}
 		else
 		{
-			lines ~= strContentTabs ~ "return call(" ~ strParameterNames.joinWith( ", " ) ~ " );";
+			lines ~= strContentTabs ~ "return binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
 		}
 		lines ~= strObjTabs ~ "}";
 		lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
 		lines ~= Blank;
+		return lines;
+	}
+
+	string[] generateCSharpConstructorsAndDestructors( CSharpObject obj, int depth = 0 )
+	{
+		string strObjTabs = generateTabs( depth );
+
+		string strSeparator = strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
+
+		string[] lines;
+
+		lines ~= "#region InternalMagic";
+		lines ~= strObjTabs ~ "public " ~ obj.strName ~ "()";
+		lines ~= strObjTabs ~ "{";
+		lines ~= strObjTabs ~ "\tpObj = new ImportedClass( \"" ~ obj.strFullName ~ "\" );";
+		lines ~= strObjTabs ~ "}";
+		lines ~= strSeparator;
+		lines ~= Blank;
+		lines ~= strObjTabs ~ "~" ~ obj.strName ~ "()";
+		lines ~= strObjTabs ~ "{";
+		lines ~= strObjTabs ~ "\tDispose();";
+		lines ~= strObjTabs ~ "}";
+		lines ~= strSeparator;
+		lines ~= Blank;
+		lines ~= strObjTabs ~ "public void Dispose()";
+		lines ~= strObjTabs ~ "{";
+		lines ~= strObjTabs ~ "\tif( pObj != null )";
+		lines ~= strObjTabs ~ "\t{";
+		lines ~= strObjTabs ~ "\t\tpObj.Dispose();";
+		lines ~= strObjTabs ~ "\t\tpObj = null;";
+		lines ~= strObjTabs ~ "\t}";
+		lines ~= strObjTabs ~ "}";
+		lines ~= strSeparator;
+		lines ~= "#endregion";
+
 		return lines;
 	}
 
@@ -1029,6 +1267,21 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 				lines ~= Blank;
 				break;
 
+			case Enum:
+				lines ~= strObjTabs ~ "public enum " ~ obj.strName ~ " : " ~ cast(string)obj.pThisEnum.strUnderlyingTypeCSharp;
+				lines ~= strObjTabs ~ "{";
+				foreach( ref enumVal; obj.pThisEnum.vecAllValues.toSlice )
+				{
+					lines ~= strObjTabs ~ "\t" ~ cast(string)enumVal.strIdentifier ~ " = " ~ cast(string)enumVal.strValue ~ ",";
+				}
+				lines ~= strObjTabs ~ "}";
+				lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
+				lines ~= Blank;
+				break;
+
+			case Class:
+				goto case Struct;
+			
 			case Struct:
 				foreach( strTok; obj.strTypeDecl )
 				{
@@ -1047,6 +1300,10 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 				}
 				lines ~= strSeparatorTabs;
 				lines ~= Blank;
+				if( obj.eType == CSharpObject.Type.Class )
+				{
+					lines ~= generateCSharpConstructorsAndDestructors( obj, depth + 1 );
+				}
 				lines ~= strObjTabs ~ "}";
 				lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
 				lines ~= Blank;
@@ -1055,6 +1312,64 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 		return lines;
 	}
+
+	string[] generateCSharpFunctionPointerSingleton( CSharpObject root )
+	{
+		string[] handleObject( CSharpObject obj )
+		{
+			string[] lines;
+
+			foreach( iIndex, func; obj.arrFunctions )
+			{
+				lines ~= generateCSharpFunctionPointer( obj, func, iIndex, 2 );
+				lines ~= Blank;
+			}
+
+			foreach( subObj; obj.subTypes.byValue )
+			{
+				lines ~= handleObject( subObj );
+			}
+
+			return lines;
+		}
+
+		string[] lines;
+
+		lines ~= Blank;
+		lines ~= Separator;
+		lines ~= Separator;
+		lines ~= "#region InternalMagic";
+		lines ~= "namespace binderoointernal";
+		lines ~= "{";
+		lines ~= "\tpublic static class FP";
+		lines ~= "\t{";
+		lines ~= handleObject( root );
+		lines ~= "\t}";
+		lines ~= "}";
+		lines ~= "#endregion";
+		lines ~= Separator;
+		lines ~= Separator;
+
+		return lines;
+	}
+
+/*	CSharpObject resolveObject( CSharpObject currObj, string[] strObjNameSplit )
+	{
+		while( strObjNameSplit.length > 0 )
+		{
+			const( CSharpObject* ) thisObj = strObjNameSplit[ 0 ] in currObj.subTypes;
+			if( thisObj is null )
+			{
+				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strObjNameSplit[ 0 ], strObjFullName, currObj );
+				currObj.subTypes[ newObj.strName ] = newObj;
+			}
+
+			currObj = currObj.subTypes[ strObjNameSplit[ 0 ] ];
+			strObjNameSplit = strObjNameSplit[ 1 .. $ ];
+		}
+
+		return currObj;
+	}*/
 
 	CSharpObject root = new CSharpObject( CSharpObject.Type.Root );
 
@@ -1069,12 +1384,13 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		}
 
 		CSharpObject currObj = root;
+
 		while( strObjNameSplit.length > 1 )
 		{
 			const( CSharpObject* ) thisObj = strObjNameSplit[ 0 ] in currObj.subTypes;
 			if( thisObj is null )
 			{
-				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strObjNameSplit[ 0 ], currObj );
+				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strObjNameSplit[ 0 ], strObjFullName, currObj );
 				currObj.subTypes[ newObj.strName ] = newObj;
 			}
 
@@ -1082,7 +1398,8 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			strObjNameSplit = strObjNameSplit[ 1 .. $ ];
 		}
 
-		CSharpObject thisObj = new CSharpObject( CSharpObject.Type.Struct, strObjNameSplit[ 0 ], currObj );
+		CSharpObject.Type eNewType = ( currExportedObj.eType == BoundObject.Type.Value ? CSharpObject.Type.Struct : CSharpObject.Type.Class );
+		CSharpObject thisObj = new CSharpObject( eNewType, strObjNameSplit[ 0 ], strObjFullName, currObj );
 		currObj.subTypes[ thisObj.strName ] = thisObj;
 
 		thisObj.strVariables = currExportedObj.generateCSharpVariables();
@@ -1105,7 +1422,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			const( CSharpObject* ) thisObj = strFuncSplitNames[ 0 ] in currObj.subTypes;
 			if( thisObj is null )
 			{
-				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strFuncSplitNames[ 0 ], currObj );
+				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strFuncSplitNames[ 0 ], strFuncFullName, currObj );
 				currObj.subTypes[ newObj.strName ] = newObj;
 			}
 
@@ -1116,12 +1433,43 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		const( CSharpObject* ) thisClass = strFuncSplitNames[ 0 ] in currObj.subTypes;
 		if( thisClass is null )
 		{
-			currObj.subTypes[ strFuncSplitNames[ 0 ] ] = new CSharpObject( CSharpObject.Type.StaticClass, strFuncSplitNames[ 0 ], currObj );
+			currObj.subTypes[ strFuncSplitNames[ 0 ] ] = new CSharpObject( CSharpObject.Type.StaticClass, strFuncSplitNames[ 0 ], strFuncFullName, currObj );
 		}
 		currObj.subTypes[ strFuncSplitNames[ 0 ] ].arrFunctions ~= &currFunction;
 	}
 
-	string[] lines = generateCSharpForObject( root, 0 );
+	foreach( ref currEnum; exportEnums )
+	{
+		string strEnumFullName = cast(string)currEnum.strName;
+		string[] strEnumNameSplit = strEnumFullName.split( '.' );
+
+		if( strEnumNameSplit.length > 0 && strEnumNameSplit[ 0 ] == "binderoo" )
+		{
+			continue;
+		}
+
+		CSharpObject currObj = root;
+
+		while( strEnumNameSplit.length > 1 )
+		{
+			const( CSharpObject* ) thisObj = strEnumNameSplit[ 0 ] in currObj.subTypes;
+			if( thisObj is null )
+			{
+				CSharpObject newObj = new CSharpObject ( CSharpObject.Type.Namespace, strEnumNameSplit[ 0 ], strEnumFullName, currObj );
+				currObj.subTypes[ newObj.strName ] = newObj;
+			}
+
+			currObj = currObj.subTypes[ strEnumNameSplit[ 0 ] ];
+			strEnumNameSplit = strEnumNameSplit[ 1 .. $ ];
+		}
+
+		CSharpObject thisObj = new CSharpObject( CSharpObject.Type.Enum, strEnumNameSplit[ 0 ], strEnumFullName, currObj );
+		currObj.subTypes[ thisObj.strName ] = thisObj;
+		
+		thisObj.pThisEnum = &currEnum;
+	}
+
+	string[] lines = generateCSharpForObject( root, 0 ) ~ generateCSharpFunctionPointerSingleton( root );
 
 	foreach( currLine; lines )
 	{
@@ -1373,5 +1721,6 @@ __gshared BoundFunction[]							exportFunctions;
 __gshared size_t[ BoundFunction.Hashes ]			exportFunctionIndices;
 __gshared BoundObject[]								exportObjects;
 __gshared size_t[ ulong ]							exportObjectIndices;
+__gshared BoundEnum[]								exportEnums;
 
 //============================================================================
