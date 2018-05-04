@@ -126,16 +126,17 @@ struct BoundObjectFunctions( Type )
 			import binderoo.binding.inheritance : constructObject;
 
 			constructObject( *pVal );
+
+			return cast(void*)mem;
 		}
 		else
 		{
-			static assert( false, "Classes aren't ready to be used like this. Please stick to structs." );
+			//static assert( false, "Classes aren't ready to be used like this. Please stick to structs." );
 
-			Type pVal = cast(Type)mem;
 			emplace!( Type )( mem[ 0 .. TypeSize ] );
-		}
 
-		return cast(void*)mem;
+			return cast(void*)mem;
+		}
 	}
 
 	static extern( C ) void deallocObj( void* pObj )
@@ -159,7 +160,7 @@ struct BoundObjectFunctions( Type )
 		}
 		else
 		{
-			destroy( obj );
+			destroy( val );
 		}
 
 		GC.removeRange( pObj );
@@ -237,26 +238,27 @@ struct BoundObjectFunctions( Type )
 		import binderoo.typedescriptor;
 
 		string[] strOutput;
-		static if( is( Type == struct ) )
+		static if( TypeVal == BoundObject.Type.Value )
 		{
 			strOutput ~= "[ StructLayout( LayoutKind.Explicit, Pack = " ~ Type.alignof.to!string ~ " ) ]";
 			strOutput ~= "public struct " ~ CSharpTypeString!Type;
 		}
-		else static if( is( Type == class ) )
+		else static if( TypeVal == BoundObject.Type.Reference )
 		{
+			strOutput ~= "public class " ~ CSharpTypeString!Type ~ " : IDisposable";
 		}
 		return strOutput;
 	}
 
 	static string[] generateCSharpVariables()
 	{
-		import std.conv : to;
-		import binderoo.objectprivacy;
-		import binderoo.typedescriptor;
-
 		string[] strOutput;
 		static if( is( Type == struct ) )
 		{
+			import std.conv : to;
+			import binderoo.objectprivacy;
+			import binderoo.typedescriptor;
+
 			static foreach( var; Type.tupleof )
 			{
 				strOutput ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
@@ -271,6 +273,7 @@ struct BoundObjectFunctions( Type )
 		}
 		else static if( is( Type == class ) )
 		{
+			strOutput ~= "\tImportedClass pObj;";
 		}
 
 		return strOutput;
