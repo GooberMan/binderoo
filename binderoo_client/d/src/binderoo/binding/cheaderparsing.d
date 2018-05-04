@@ -881,6 +881,7 @@ string CTypeNameToDTypeName( string[] strTokens, bool bRetainIdentifier )
 	int iShortCount;
 	int iIntCount;
 	bool bIgnore;
+	bool bSignedUnsigned;
 
 	void pushWorking()
 	{
@@ -916,10 +917,17 @@ string CTypeNameToDTypeName( string[] strTokens, bool bRetainIdentifier )
 		{
 			foundTypes ~= working;
 		}
+		else if( bSignedUnsigned )
+		{
+			working.strType ~= "int";
+			foundTypes ~= working;
+		}
 
 		iLongCount = 0;
 		iShortCount = 0;
 		iIntCount = 0;
+		bIgnore = false;
+		bSignedUnsigned = false;
 		working = DType.init;
 	}
 
@@ -945,6 +953,7 @@ string CTypeNameToDTypeName( string[] strTokens, bool bRetainIdentifier )
 			}
 			else if( tok == "signed" )
 			{
+				working.bUnsigned = false;
 			}
 			else if( tok == "long" )
 			{
@@ -1256,7 +1265,7 @@ ref CAggregate HandleTypedefStatement( ref CAggregate output, ref CObjectVisibil
 				newTypedef.strActualType = strReturnType.joinWith( " " ) ~ "(*)( " ~ strParams.joinWith( " " ) ~ " )";
 				newTypedef.strDDecl = "extern( C++ ) " ~ strReturnType.joinWith( " " ) ~ " function( " ~ strParams.CTypeNameToDTypeName( false ) ~ " )";
 
-				writeln( strFullStatement, " ==>\nalias ", newTypedef.strIdentifier, " = ", newTypedef.strDDecl );
+				//writeln( strFullStatement, " ==>\nalias ", newTypedef.strIdentifier, " = ", newTypedef.strDDecl );
 			}
 			else
 			{
@@ -1479,7 +1488,7 @@ ref CAggregate HandleFunctionStatement( ref CAggregate output, ref CObjectVisibi
 	import std.algorithm : min;
 
 	import std.stdio : writeln;
-	writeln( strStatementTokens.joinWith( " <===>" ) );
+	//writeln( strStatementTokens.joinWith( " <===> " ) );
 
 	bool bShouldAdd = true;
 	CFunction newFunc;
@@ -1691,7 +1700,7 @@ ref CAggregate HandleStatement( ref CAggregate output, ref CObjectVisibility eVi
 				eType = FunctionDecl;
 				iBracketToken = iTokenIndex;
 				import std.stdio : writeln;
-				writeln( strFullStatement );
+				//writeln( strFullStatement );
 				HandleFunctionStatement( output, eVisibility, strStatementTokens, strExtendedStatement );
 				break tokenloop;
 			}
