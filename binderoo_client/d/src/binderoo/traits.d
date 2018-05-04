@@ -122,6 +122,12 @@ template IsUserTypeButNotEnum( alias T )
 }
 //----------------------------------------------------------------------------
 
+template IsEnum( T )
+{
+	enum IsEnum = is( T == enum );
+}
+//----------------------------------------------------------------------------
+
 alias IsAggregateType( T ) = IsUserTypeButNotEnum!T;
 alias IsAggregateType( alias T ) = IsUserTypeButNotEnum!T;
 //----------------------------------------------------------------------------
@@ -448,7 +454,6 @@ template IsTemplatedType( T )
 
 template IsTemplatedType( T : U[], U )
 {
-	pragma( msg, U.stringof );
 	enum IsTemplatedType = IsTemplatedType!( U );
 }
 //----------------------------------------------------------------------------

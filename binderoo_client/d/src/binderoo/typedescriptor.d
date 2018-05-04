@@ -198,10 +198,10 @@ enum CTypeNameOverride( T : ulong )			= "uint64_t";
 enum CTypeNameOverride( T : wchar )			= "wchar_t";
 enum CTypeNameOverride( T : char )			= "char"; // char will cast to a byte if you don't redefine here
 enum CTypeNameOverride( T : bool )			= "bool"; // Returns char otherwise when parsing functions? o_O
+enum CTypeNameOverride( T : string )		= "binderoo::DSlice<char>";
+enum CTypeNameOverride( T : A[], A )		= "binderoo::Slice<" ~ CTypeNameOverride!A ~ ">";
 //----------------------------------------------------------------------------
 
-enum CSharpTypeNameOverride( T : char )		= "byte";
-enum CSharpTypeNameOverride( T : wchar ) 	= "char";
 enum CSharpTypeNameOverride( T : byte )		= "sbyte";
 enum CSharpTypeNameOverride( T : ubyte )	= "byte";
 enum CSharpTypeNameOverride( T : short )	= "short";
@@ -210,8 +210,10 @@ enum CSharpTypeNameOverride( T : int )		= "int";
 enum CSharpTypeNameOverride( T : uint )		= "uint";
 enum CSharpTypeNameOverride( T : long )		= "long";
 enum CSharpTypeNameOverride( T : ulong )	= "ulong";
+enum CSharpTypeNameOverride( T : char )		= "byte";
 version( Windows ) enum CSharpTypeNameOverride( T : wchar )	= "char";
 else enum CSharpTypeNameOverride( T : wchar ) = "uint";
+enum CSharpTypeNameOverride( T : bool )		= "bool";
 //----------------------------------------------------------------------------
 
 template CTypeString( T )
@@ -303,10 +305,6 @@ template CSharpTypeString( T )
 	{
 		enum CSharpTypeString = "IntPtr"; //CSharpTypeString!( binderoo.traits.PointerTarget!( T ) ) ~ "*";
 	}
-	else static if( CSharpTypeNameOverride!( T ) != TypeNameUndefined )
-	{
-		enum CSharpTypeString = CSharpTypeNameOverride!( T );
-	}
 	else static if( IsUserType!( T ) )
 	{
 		static if( HasUDA!( T, CSharpTypeName ) )
@@ -318,13 +316,21 @@ template CSharpTypeString( T )
 			enum CSharpTypeString = T.stringof;
 		}
 	}
+	else static if( CSharpTypeNameOverride!( T ) != TypeNameUndefined )
+	{
+		enum CSharpTypeString = CSharpTypeNameOverride!( T );
+	}
 	else
 	{
 		enum CSharpTypeString = T.stringof;
 	}
 }
 
-enum CSharpFullTypeString( T ) = FullTypeName!T[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!T;
+template CSharpFullTypeString( T )
+{
+	enum CSharpFullTypeString = FullTypeName!T[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!T;
+	//pragma( msg, T.stringof ~ " -> " ~ FullTypeName!T ~ " --> " ~ CSharpFullTypeString );
+}
 
 struct TypeString( T, bool bIsRef = false )
 {
@@ -356,11 +362,11 @@ struct TypeString( T, bool bIsRef = false )
 		static if( ( IsConst!( T ) || IsImmutable!( T ) )
 					&& bIsRef )
 		{
-			return "in " ~ CSharpTypeString!( Unqual!( T ) );
+			return "in " ~ CSharpFullTypeString!( Unqual!( T ) );
 		}
 		else
 		{
-			return ( bIsRef ? "ref " : "" ) ~ CSharpTypeString!( T );
+			return ( bIsRef ? "ref " : "" ) ~ CSharpFullTypeString!( T );
 		}
 	}
 	//------------------------------------------------------------------------

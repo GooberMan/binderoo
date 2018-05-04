@@ -141,7 +141,8 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 	// The struct/class that contains the element we're interested in.
 	alias 					ObjectType				= void;
 
-	enum					IsMemberFunction		= !is( T == void );
+	enum					IsMemberFunction		= false;
+	enum					IsImplementedInType		= true;
 
 	// The type of the function.
 	alias					FunctionType			= FunctionTypeOf!( symbol );
@@ -161,7 +162,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 	//------------------------------------------------------------------------
 
 	enum					ModuleName				= binderoo.traits.ModuleName!( symbol );
-	enum					FullyQualifiedName		= FullTypeName!( symbol );
+	enum					FullyQualifiedName		= ModuleName ~ "." ~ Name; //FullTypeName!( symbol );
 	//------------------------------------------------------------------------
 
 	private alias			ReturnDescriptor		= TypeDescriptor!( std.traits.ReturnType!( symbol ), ReturnsRef );
@@ -325,6 +326,15 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 	alias 					ObjectType				= T;
 
 	enum					IsMemberFunction		= !is( T == void );
+	static if( IsMemberFunction )
+	{
+		alias 				FunctionParentType		= binderoo.traits.Alias!( __traits( parent, __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) );
+		enum				IsImplementedInType		= is( FunctionParentType == T );
+	}
+	else
+	{
+		enum				IsImplementedInType		= false;
+	}
 
 	// The type of the function.
 	alias					FunctionType			= FunctionTypeOf!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
@@ -344,7 +354,7 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 	//------------------------------------------------------------------------
 
 	enum					ModuleName				= binderoo.traits.ModuleName!( T );
-	enum					FullyQualifiedName		= FullTypeName!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
+	enum					FullyQualifiedName		= FullTypeName!( T ) ~ "." ~ Name; //FullTypeName!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
 	//------------------------------------------------------------------------
 
 	private alias			ReturnDescriptor		= TypeDescriptor!( std.traits.ReturnType!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ), ReturnsRef );
