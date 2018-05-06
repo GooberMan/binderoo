@@ -37,7 +37,9 @@ namespace binderoo
 	{
 		public ImportedFunction( string strFuncName, string strSignature )
 		{
-			m_pFunc = binderoo_host_create_imported_function( strFuncName, strSignature );
+			m_strFuncName = strFuncName;
+			m_strSignature = strSignature;
+			Obtain();
 		}
 		//--------------------------------------------------------------------
 		
@@ -71,6 +73,15 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
+		public void Obtain()
+		{
+			if ( m_pFunc == IntPtr.Zero )
+			{
+				m_pFunc = binderoo_host_create_imported_function( m_strFuncName, m_strSignature );
+			}
+		}
+		//--------------------------------------------------------------------
+
 		public void Dispose()
 		{
 			if( m_pFunc != IntPtr.Zero )
@@ -82,6 +93,8 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		private IntPtr		m_pFunc;
+		private string		m_strFuncName;
+		private string		m_strSignature;
 #endregion
 	}
 	//------------------------------------------------------------------------
