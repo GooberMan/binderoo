@@ -31,6 +31,7 @@ module binderoo.binding.binding;
 //----------------------------------------------------------------------------
 
 public import binderoo.binding.attributes;
+public import binderoo.binding.cppfunctiongenerator;
 public import binderoo.binding.functionstub;
 public import binderoo.binding.boundenum;
 public import binderoo.binding.boundfunction;
@@ -498,109 +499,6 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 	BoundFunction[] generateFunctionExports( ExportTypes... )()
 	{
-		string FunctionGeneratorGlobal( alias Desc )()
-		{
-			enum FnName = Desc.FunctionName;
-
-			string generate()
-			{
-				import std.string : replace;
-				import std.conv : to;
-				
-				string strOutput = "pragma( mangle, \"wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( C++ ) ";
-				if( Desc.ReturnsRef )
-				{
-					strOutput ~= "ref ";
-				}
-				strOutput ~= Desc.ReturnType.stringof ~ " ";
-				strOutput ~= FnName;
-				strOutput ~= "( ";
-
-				string[] strParameters;
-				string[] strParameterNames;
-				static foreach( Param; Desc.ParametersAsTuple )
-				{
-					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
-					strParameterNames ~= Param.Name;
-				}
-
-				strOutput ~= strParameters.joinWith( ", " );
-
-				strOutput ~= " ) { ";
-				static if( Desc.HasReturnType )
-				{
-					strOutput ~= "return ";
-				}
-				strOutput ~= Desc.FullyQualifiedName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ); }";
-
-				return strOutput;
-			}
-
-			return generate();
-		}
-
-		string FunctionGeneratorMember( alias Desc )()
-		{
-			enum FnName = Desc.FunctionName;
-
-			string generate()
-			{
-				import std.string : replace;
-				import std.conv : to;
-				string strOutput = "pragma( mangle, \"wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( C++ ) ";
-				if( Desc.ReturnsRef )
-				{
-					strOutput ~= "ref ";
-				}
-				strOutput ~= Desc.ReturnType.stringof ~ " ";
-				strOutput ~= FnName;
-				strOutput ~= "( ";
-
-				string[] strParameters;
-				string[] strParameterNames;
-				static if( is( Desc.ObjectType == class ) )
-				{
-					strParameters ~= Desc.ObjectType.stringof ~ " pThis";				
-				}
-				else
-				{
-					strParameters ~= Desc.ObjectType.stringof ~ "* pThis";
-				}
-				strParameterNames ~= "pThis";
-				static foreach( Param; Desc.ParametersAsTuple )
-				{
-					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
-					strParameterNames ~= Param.Name;
-				}
-
-				strOutput ~= strParameters.joinWith( ", " );
-
-				strOutput ~= " ) { ";
-				static if( Desc.HasReturnType )
-				{
-					strOutput ~= "return ";
-				}
-				strOutput ~= "pThis." ~ FnName ~ "( " ~ strParameterNames[ 1 .. $ ].joinWith( ", " ) ~ " ); }";
-
-				return strOutput;
-			}
-
-			return generate();
-		}
-
-		template CPPFunctionGenerator( alias Desc )
-		{
-			static if( !Desc.IsMemberFunction || Desc.IsStatic )
-			{
-				enum Defn		= FunctionGeneratorGlobal!( Desc );
-			}
-			else
-			{
-				enum Defn		= FunctionGeneratorMember!( Desc );
-			}
-
-			mixin( Defn );
-		}
 
 		BoundFunction[] functionGrabber( int IntroducedVersion, alias Scope, Symbols... )()
 		{
@@ -627,7 +525,7 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 						alias NewFunc = CPPFunctionGenerator!Descriptor;
 
 						//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
-						mixin( "pFunction = &NewFunc." ~ Descriptor.Name ~ ";" );
+						mixin( "pFunction = &NewFunc.Func;" );
 					}
 
 					enum FullName		= Descriptor.FullyQualifiedName;
@@ -1469,7 +1367,12 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		thisObj.pThisEnum = &currEnum;
 	}
 
-	string[] lines = generateCSharpForObject( root, 0 ) ~ generateCSharpFunctionPointerSingleton( root );
+	string[] lines 	= [ "// Binderoo generated file - DO NOT MODIFY!",
+					"// Regenerate the file if a change is required.",
+					Separator,
+					Blank ]
+					~ generateCSharpForObject( root, 0 )
+					~ generateCSharpFunctionPointerSingleton( root );
 
 	foreach( currLine; lines )
 	{
