@@ -85,6 +85,8 @@ struct VariableDescriptor( T, ET, string objectName = null )
 	alias			Name							= ElementName;
 	//------------------------------------------------------------------------
 
+	enum			ModuleName						= binderoo.traits.ModuleName!( Type );
+
 	enum			IsStatic						= binderoo.traits.IsStaticMember!( T, Name );
 	enum			IsMutable						= binderoo.traits.IsMutable!( T );
 	//------------------------------------------------------------------------
@@ -141,17 +143,17 @@ template VariableDescriptors( T )
 
 			string[] modules;
 
-			modules ~= moduleName!( T );
+			modules ~= binderoo.traits.ModuleName!( T );
 
 			foreach( iIndex, member; T.init.tupleof )
 			{
 				alias ThisType = typeof( T.tupleof[ iIndex ] );
 				static if( IsUserType!( ThisType ) )
 				{
-					enum ModuleName = moduleName!( binderoo.traits.PointerTarget!ThisType );
-					if( !modules.canFind( ModuleName ) )
+					enum ThisModuleName = binderoo.traits.ModuleName!( binderoo.traits.PointerTarget!ThisType );
+					if( !modules.canFind( ThisModuleName ) )
 					{
-						modules ~= ModuleName;
+						modules ~= ThisModuleName;
 					}
 				}
 			}
