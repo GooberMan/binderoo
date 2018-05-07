@@ -48,104 +48,91 @@ template CPPFunctionGenerator( alias Desc )
 {
 	static if( IsTemplatedType!Desc && is( Desc == FunctionDescriptor!( TemplateParametersOf!( Desc ) ) ) )
 	{
-		// WHY DO I HAVE TO KEEP DOING THIS...
 		mixin( "import " ~ Desc.ModuleName ~ ";" );
-		enum FnName = "Func"; //Desc.FunctionName;
-
-		string FunctionGeneratorGlobal( alias Desc )()
+		string generate()
 		{
-			string generate()
+			import std.string : replace;
+			import std.conv : to;
+			import std.format : format;
+			// WHY DO I HAVE TO KEEP DOING THIS...
+			enum FnName = "Func"; //Desc.FunctionName;
+
+			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( %s ) ";
+			enum ExportDeclC = MangleBase.format( "c", "C" );
+			enum ExportDeclCPP = MangleBase.format( "cpp", "C++" );
+
+			string strCOutput;
+			string strCPPOutput;
+
+			void appendToBoth( string val )
 			{
-				import std.string : replace;
-				import std.conv : to;
-				
-				string strOutput = "pragma( mangle, \"wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( C++ ) ";
-				if( Desc.ReturnsRef )
-				{
-					strOutput ~= "ref ";
-				}
-				strOutput ~= Desc.ReturnType.stringof ~ " ";
-				strOutput ~= FnName;
-				strOutput ~= "( ";
-
-				string[] strParameters;
-				string[] strParameterNames;
-				static foreach( Param; Desc.ParametersAsTuple )
-				{
-					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
-					strParameterNames ~= Param.Name;
-				}
-
-				strOutput ~= strParameters.joinWith( ", " );
-
-				strOutput ~= " ) { ";
-				static if( Desc.HasReturnType )
-				{
-					strOutput ~= "return ";
-				}
-				strOutput ~= Desc.FullyQualifiedName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ); }";
-
-				return strOutput;
+				strCOutput ~= val;
+				strCPPOutput ~= val;
 			}
 
-			return generate();
-		}
-
-		string FunctionGeneratorMember( alias Desc )()
-		{
-			string generate()
+			string[] strParameters;
+			string[] strParameterNames;
+			static if( Desc.IsMemberFunction )
 			{
-				import std.string : replace;
-				import std.conv : to;
-				string strOutput = "pragma( mangle, \"wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( C++ ) ";
-				if( Desc.ReturnsRef )
-				{
-					strOutput ~= "ref ";
-				}
-				strOutput ~= Desc.ReturnType.stringof ~ " ";
-				strOutput ~= FnName;
-				strOutput ~= "( ";
-
-				string[] strParameters;
-				string[] strParameterNames;
 				static if( is( Desc.ObjectType == class ) )
 				{
-					strParameters ~= Desc.ObjectType.stringof ~ " pThis";				
+					strParameters ~= Desc.ObjectType.stringof ~ " pThis";
 				}
 				else
 				{
 					strParameters ~= Desc.ObjectType.stringof ~ "* pThis";
 				}
 				strParameterNames ~= "pThis";
-				static foreach( Param; Desc.ParametersAsTuple )
-				{
-					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
-					strParameterNames ~= Param.Name;
-				}
-
-				strOutput ~= strParameters.joinWith( ", " );
-
-				strOutput ~= " ) { ";
-				static if( Desc.HasReturnType )
-				{
-					strOutput ~= "return ";
-				}
-				strOutput ~= "pThis." ~ Desc.FunctionName ~ "( " ~ strParameterNames[ 1 .. $ ].joinWith( ", " ) ~ " ); }";
-
-				return strOutput;
+			}
+			static foreach( Param; Desc.ParametersAsTuple )
+			{
+				strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
+				strParameterNames ~= Param.Name;
 			}
 
-			return generate();
+			strCOutput = ExportDeclC;
+			strCPPOutput = ExportDeclCPP;
+			static if( Desc.ReturnsRef )
+			{
+				strCPPOutput ~= "ref ";
+			}
+			appendToBoth( Desc.ReturnType.stringof );
+			static if( Desc.ReturnsRef )
+			{
+				strCOutput ~= "*";
+			}
+
+			appendToBoth( " " ~ FnName );
+			strCOutput ~= "CDecl";
+			strCPPOutput ~= "CPPDecl";
+			appendToBoth( "( " ~ strParameters.joinWith( ", " ) ~ " ) { " );
+			static if( Desc.HasReturnType )
+			{
+				appendToBoth( "return " );
+			}
+
+			static if( Desc.ReturnsRef )
+			{
+				strCOutput ~= "&";
+			}
+
+			static if( Desc.IsMemberFunction )
+			{
+				enum ParamNameBaseIndex = 1;
+				appendToBoth( "pThis." ~ Desc.FunctionName );
+			}
+			else
+			{
+				enum ParamNameBaseIndex = 0;
+				appendToBoth( Desc.FullyQualifiedName );
+			}
+				
+			appendToBoth( "( " ~ strParameterNames[ ParamNameBaseIndex .. $ ].joinWith( ", " ) ~ " ); }" );
+
+			return strCOutput ~ "\n" ~ strCPPOutput;
 		}
 
-		static if( !Desc.IsMemberFunction || Desc.IsStatic )
-		{
-			enum Defn		= FunctionGeneratorGlobal!( Desc );
-		}
-		else
-		{
-			enum Defn		= FunctionGeneratorMember!( Desc );
-		}
+		enum Defn		= generate();
 	}
 	else static if( IsTemplatedType!Desc && is( Desc == VariableDescriptor!( TemplateParametersOf!( Desc ) ) ) )
 	{
@@ -153,5 +140,6 @@ template CPPFunctionGenerator( alias Desc )
 		enum Defn = "alias Func = void function();";
 	}
 
+	pragma( msg, Defn );
 	mixin( Defn );
 }

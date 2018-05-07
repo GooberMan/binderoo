@@ -513,19 +513,26 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 				//static assert( Descriptor.IsCPlusPlusFunction, FullTypeName!( CurrFuncSymbol ) ~ " can only be exported as extern( C++ ) for now." );
 				static if( Descriptor.IsImplementedInType )
 				{
-					void* pFunction;
+					void* pFunctionCDecl;
+					void* pFunctionCPPDecl;
+
+					alias NewFunc = CPPFunctionGenerator!Descriptor;
 
 					static if( Descriptor.IsCPlusPlusFunction )
 					{
-						//alias Descriptor = OriginalDescriptor;
-						mixin( "pFunction = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+						pFunctionCDecl = &NewFunc.FuncCDecl;
+						mixin( "pFunctionCPPDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+					}
+					else static if( Descriptor.IsCFunction )
+					{
+						mixin( "pFunctionCDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+						pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
 					}
 					else
 					{
-						alias NewFunc = CPPFunctionGenerator!Descriptor;
-
 						//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
-						mixin( "pFunction = &NewFunc.Func;" );
+						pFunctionCDecl = &NewFunc.FuncCDecl;
+						pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
 					}
 
 					enum FullName		= Descriptor.FullyQualifiedName;
@@ -552,7 +559,8 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 													, Slice!DString.init
 													, Slice!DString.init
 													, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
-													, pFunction
+													, pFunctionCDecl
+													, pFunctionCPPDecl
 													, iIntroducedVersion
 													, 0
 													, BoundFunction.Resolution.Exported
@@ -1499,8 +1507,8 @@ body*/
 		{
 			foreach( ref targetImport; *foundArray )
 			{
-				void** pTarget = cast(void**)targetImport.pFunction;
-				*pTarget = exportedFunction.pFunction;
+				void** pTarget = cast(void**)targetImport.pFunctionCPPDecl;
+				*pTarget = exportedFunction.pFunctionCPPDecl;
 				targetImport.eResolution = BoundFunction.Resolution.Imported;
 			}
 		}

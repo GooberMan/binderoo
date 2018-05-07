@@ -174,6 +174,7 @@ struct BoundFunction
 		Abstract			= 0x8,
 		Constructor			= 0x10,
 		Destructor			= 0x20,
+		Property			= 0x40,
 		VirtualDestructor	= Virtual | Destructor,
 	}
 
@@ -199,7 +200,8 @@ struct BoundFunction
 	Slice!( DString )		strIncludeVersions;
 	Slice!( DString )		strExcludeVersions;
 	Hashes					functionHashes;
-	void*					pFunction;
+	void*					pFunctionCDecl;
+	void*					pFunctionCPPDecl;
 	int						iMinimumVersion;
 	int						iOrderInTable;
 	Resolution				eResolution;

@@ -604,8 +604,8 @@ void binderoo::HostImplementation::recreateImportedObjects()
 
 		if( pFunction )
 		{
-			pImportedFunction->pObjectInstance		= (void*)pFunction->pObject->pFunction;
-			pImportedFunction->pObjectDescriptor		= (void*)pFunction;
+			pImportedFunction->pObjectInstance		= (void*)pFunction->pObject->pFunctionCPPDecl;
+			pImportedFunction->pObjectDescriptor	= (void*)pFunction;
 		}
 	}
 
@@ -642,7 +642,7 @@ void binderoo::HostImplementation::collectExports()
 
 			bound.functionHashes.uFunctionNameHash			= uSymbolHash;
 			bound.functionHashes.uFunctionSignatureHash		= uSignatureHash;
-			bound.pFunction									= method.pFunctionPointer;
+			bound.pFunctionCPPDecl							= method.pFunctionPointer;
 			bound.iMinimumVersion							= pCurrClass->getVersion();
 			bound.eResolution								= BoundFunction::Resolution::Exported;
 
@@ -1091,7 +1091,7 @@ void binderoo::HostImplementation::registerImportedFunction( binderoo::ImportedB
 
 	if( pFunction )
 	{
-		pInstance->pObjectInstance		= (void*)pFunction->pObject->pFunction;
+		pInstance->pObjectInstance		= (void*)pFunction->pObject->pFunctionCPPDecl;
 		pInstance->pObjectDescriptor	= (void*)pFunction;
 	}
 

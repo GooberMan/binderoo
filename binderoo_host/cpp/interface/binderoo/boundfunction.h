@@ -103,7 +103,8 @@ namespace binderoo
 		Slice< DString >		strIncludeVersions;
 		Slice< DString >		strExcludeVersions;
 		Hashes					functionHashes;
-		void*					pFunction;
+		void*					pFunctionCDecl;
+		void*					pFunctionCPPDecl;
 		int						iMinimumVersion;
 		int						iOrderInTable;
 		Resolution				eResolution;
