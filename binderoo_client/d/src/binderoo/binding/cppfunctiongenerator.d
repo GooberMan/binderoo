@@ -35,29 +35,32 @@ public import binderoo.functiondescriptor;
 public import binderoo.variabledescriptor;
 
 // CPPFunctionGenerator!FunctionDescriptor has the following members:
-// * Func - a CPP wrappper to the specified function
+// * FuncCDecl - a C wrappper to the specified function
+// * FuncCPPDecl - a C++ wrappper to the specified function
 //
 // CPPFunctionGenerator!VariableDescriptor has the following members:
-// * Getter - a CPP getter (thiscall compliant for aggregate members)
-// * Setter - a CPP setter (thiscall compliant for aggregate members)
+// * GetterCDecl - a C getter, first parameter is aggregate object if applicable
+// * SetterCDecl - a C setter, first parameter is aggregate object if applicable
+// * GetterCPPDecl - a C++ getter (thiscall compliant for aggregate members)
+// * SetterCPPDecl - a C++ setter (thiscall compliant for aggregate members)
 //
 // These functions are directly callable using the required parameters, and you
 // can obtain the address of the function just as easily
-
-template CPPFunctionGenerator( alias Desc )
+struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 {
-	static if( IsTemplatedType!Desc && is( Desc == FunctionDescriptor!( TemplateParametersOf!( Desc ) ) ) )
+	import std.string : replace, toLower;
+	import std.conv : to;
+	import std.format : format;
+
+	static if( IsBaseTemplate!( FunctionDescriptor, Desc ) )
 	{
 		mixin( "import " ~ Desc.ModuleName ~ ";" );
-		string generate()
-		{
-			import std.string : replace;
-			import std.conv : to;
-			import std.format : format;
-			// WHY DO I HAVE TO KEEP DOING THIS...
-			enum FnName = "Func"; //Desc.FunctionName;
+		enum FnName = Desc.FunctionName;
 
-			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( %s ) ";
+		static string generate()
+		{
+			// WHY DO I HAVE TO KEEP DOING THIS...
+			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( %s ) static ";
 			enum ExportDeclC = MangleBase.format( "c", "C" );
 			enum ExportDeclCPP = MangleBase.format( "cpp", "C++" );
 
@@ -129,17 +132,97 @@ template CPPFunctionGenerator( alias Desc )
 				
 			appendToBoth( "( " ~ strParameterNames[ ParamNameBaseIndex .. $ ].joinWith( ", " ) ~ " ); }" );
 
-			return strCOutput ~ "\n" ~ strCPPOutput;
+			return strCOutput ~ "\n" ~ strCPPOutput ~ "\nalias FuncCDecl = " ~ FnName ~ "CDecl;\nalias FuncCPPDecl = " ~ FnName ~ "CPPDecl;";
 		}
 
-		enum Defn		= generate();
+		enum Defn = generate();
+		//pragma( msg, Defn );
+		mixin( Defn );
 	}
-	else static if( IsTemplatedType!Desc && is( Desc == VariableDescriptor!( TemplateParametersOf!( Desc ) ) ) )
+	else static if( IsBaseTemplate!( VariableDescriptor, Desc ) )
 	{
-		pragma( msg, Desc.stringof );
-		enum Defn = "alias Func = void function();";
+		mixin( "import " ~ Desc.ModuleName ~ ";" );
+		static string generate( string AccessorType )()
+		{
+			// WHY DO I HAVE TO KEEP DOING THIS...
+			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ "_%s\" )\nextern( %s ) static ";
+			enum ExportDeclC = MangleBase.format( "c", AccessorType, "C" );
+			enum ExportDeclCPP = MangleBase.format( "cpp", AccessorType, "C++" );
+
+			string strCOutput;
+			string strCPPOutput;
+
+			void appendToBoth( string val )
+			{
+				strCOutput ~= val;
+				strCPPOutput ~= val;
+			}
+
+			string[] strParameters;
+			string[] strParameterNames;
+			static if( Desc.BaseType.IsClass )
+			{
+				strParameters ~= Desc.BaseType.FullyQualifiedName ~ " pThisObj";
+			}
+			else
+			{
+				strParameters ~= Desc.BaseType.FullyQualifiedName ~ "* pThisObj";
+			}
+			strParameterNames ~= "pThisObj";
+
+			static if( AccessorType == "Setter" )
+			{
+				static if( Desc.ElementType.IsStruct )
+				{
+					strParameters ~= Desc.ElementType.FullyQualifiedName ~ "* val";
+				}
+				else
+				{
+					strParameters ~= Desc.ElementType.FullyQualifiedName ~ " val";
+				}
+				strParameterNames ~= "val";
+				strCOutput = ExportDeclC;
+				strCPPOutput = ExportDeclCPP;
+				appendToBoth( "void" );
+			}
+			else static if( AccessorType == "Getter" )
+			{
+				strCOutput = ExportDeclC;
+				strCPPOutput = ExportDeclCPP;
+				static if( Desc.ElementType.IsStruct ) strCPPOutput ~= "ref ";
+				appendToBoth( Desc.ElementType.FullyQualifiedName );
+				static if( Desc.ElementType.IsStruct ) strCOutput ~= "*";
+			}
+
+			appendToBoth( " " ~ Desc.Name ~ "_" ~ AccessorType );
+			strCOutput ~= "CDecl";
+			strCPPOutput ~= "CPPDecl";
+			appendToBoth( "( " ~ strParameters.joinWith( ", " ) ~ " ) { " );
+
+			static if( AccessorType == "Setter" )
+			{
+				enum Dereference = Desc.ElementType.IsStruct ? "*" : "";
+				appendToBoth( "pThisObj.tupleof[ " ~ Desc.TupleIndex.to!string ~ " ] = " ~ Dereference ~ "val;" );
+			}
+			else static if( AccessorType == "Getter" )
+			{
+				enum AddressOf = Desc.ElementType.IsStruct ? "&" : "";
+				strCOutput ~= "return " ~ AddressOf ~ "pThisObj.tupleof[ " ~ Desc.TupleIndex.to!string ~ " ];";
+				strCPPOutput ~= "return pThisObj.tupleof[ " ~ Desc.TupleIndex.to!string ~ " ];";
+			}
+				
+			appendToBoth( " }" );
+
+			return strCOutput ~ "\n" ~ strCPPOutput;
+		}
+		
+		enum Defn = generate!"Getter" ~ "\n" ~ generate!"Setter"
+					~ "\nalias GetterCDecl = " ~ Desc.Name ~ "_GetterCDecl;"
+					~ "\nalias SetterCDecl = " ~ Desc.Name ~ "_SetterCDecl;"
+					~ "\nalias GetterCPPDecl = " ~ Desc.Name ~ "_GetterCPPDecl;"
+					~ "\nalias SetterCPPDecl = " ~ Desc.Name ~ "_SetterCPPDecl;";
+		//pragma( msg, Defn );
+		mixin( Defn );
 	}
 
-	pragma( msg, Defn );
-	mixin( Defn );
 }
