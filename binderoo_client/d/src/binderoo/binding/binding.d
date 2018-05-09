@@ -458,6 +458,8 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 													, null
 													, null
 													, null
+													, null
+													, null
 												);
 					}
 				}
@@ -542,6 +544,22 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 					enum CSharpDecl		= FunctionString!( Descriptor ).CSharpDecl;
 					enum ParameterNames	= FunctionString!( Descriptor ).ParameterNames;
 
+					static if( Descriptor.IsStatic )
+					{
+						enum FunctionKind = BoundFunction.FunctionKind.Static;
+					}
+					else
+					{
+						static if( Descriptor.IsProperty )
+						{
+							enum FunctionKind = BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property;
+						}
+						else
+						{
+							enum FunctionKind = BoundFunction.FunctionKind.Method;
+						}
+					}
+
 					//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
 					//pragma( msg, " -> Parameter names: " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
 					//pragma( msg, " -> C Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CPrototype() );
@@ -565,17 +583,100 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 													, 0
 													, BoundFunction.Resolution.Exported
 													, BoundFunction.CallingConvention.CPP
-													, Descriptor.IsStatic ? BoundFunction.FunctionKind.Static : BoundFunction.FunctionKind.Method
+													, FunctionKind
 													, BoundFunction.Flags.None
 													, &BoundFunctionFunctions!( Descriptor ).CPrototype
 													, &BoundFunctionFunctions!( Descriptor ).DPrototype
 													, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
+													, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype
 													, &BoundFunctionFunctions!( Descriptor ).ParameterNames
 													, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
 													, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
 													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledParameterTypes
 													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
 												);
+				}
+			}
+
+			void handleVariable( Type, size_t TupleIndex )()
+			{
+				alias VariableDesc = VariableDescriptor!( Type.tupleof[ TupleIndex ] );
+				alias GeneratedFuncs = CPPFunctionGenerator!VariableDesc;
+				alias GetterDesc = FunctionDescriptor!( GeneratedFuncs.GetterCPPDecl );
+				alias SetterDesc = FunctionDescriptor!( GeneratedFuncs.SetterCPPDecl );
+
+				enum FullNameGetter = VariableDesc.FullyQualifiedName ~ "_Getter";
+				enum SignatureGetter	= FunctionString!( GetterDesc ).CSignature;
+
+				enum FullNameSetter = VariableDesc.FullyQualifiedName ~ "_Setter";
+				enum SignatureSetter	= FunctionString!( SetterDesc ).CSignature;
+
+				enum FunctionKind = cast(BoundFunction.FunctionKind)( BoundFunction.FunctionKind.CodeGenerated | BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property );
+
+				foundExports ~= BoundFunction( DString( FullNameGetter )
+												, DString( SignatureGetter )
+												, DString( "" )
+												, DString( "" )
+												, Slice!DString.init
+												, Slice!DString.init
+												, BoundFunction.Hashes( fnv1a_64( FullNameGetter ), fnv1a_64( SignatureGetter ) )
+												, &GeneratedFuncs.GetterCDecl
+												, &GeneratedFuncs.GetterCPPDecl
+												, 1 // HORRIBLE HACK
+												, 0
+												, BoundFunction.Resolution.Exported
+												, BoundFunction.CallingConvention.CPP
+												, FunctionKind
+												, BoundFunction.Flags.None
+												, &BoundFunctionFunctions!( GetterDesc ).CPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).DPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).ParameterNames
+												, &BoundFunctionFunctions!( GetterDesc ).CParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).DParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterNamesWithQualifiers
+											);
+
+				foundExports ~= BoundFunction( DString( FullNameSetter )
+												, DString( SignatureSetter )
+												, DString( "" )
+												, DString( "" )
+												, Slice!DString.init
+												, Slice!DString.init
+												, BoundFunction.Hashes( fnv1a_64( FullNameSetter ), fnv1a_64( SignatureSetter ) )
+												, &GeneratedFuncs.SetterCDecl
+												, &GeneratedFuncs.SetterCPPDecl
+												, 1 // HORRIBLE HACK
+												, 0
+												, BoundFunction.Resolution.Exported
+												, BoundFunction.CallingConvention.CPP
+												, FunctionKind
+												, BoundFunction.Flags.None
+												, &BoundFunctionFunctions!( SetterDesc ).CPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).DPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).ParameterNames
+												, &BoundFunctionFunctions!( SetterDesc ).CParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).DParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterNamesWithQualifiers
+											);
+			}
+
+			void handleVariables( Type )()
+			{
+				static foreach( iIndex; 0 .. Type.tupleof.length )
+				{
+					static if( VariableDescriptor!( Type.tupleof[ iIndex ] ).PrivacyLevel == PrivacyLevel.Public )
+					{
+						handleVariable!( Type, iIndex );
+					}
 				}
 			}
 
@@ -652,6 +753,10 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 						{
 							enum NewIntroducedVersion = UDA.iIntroducedVersion;
 							foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
+							static if( is( Symbol == class ) )
+							{
+								handleVariables!( Symbol )();
+							}
 						}
 					}
 				}
@@ -846,7 +951,7 @@ public string[] generateCPPStyleExportDeclaration( BoundFunction[] functions )
 					auto strParameters = strOriginalSig[ foundOpenBrackets .. foundCloseBrackets + 1 ];
 
 					string strTypeCast;
-					if( func.eFunctionKind == BoundFunction.FunctionKind.Static )
+					if( func.eFunctionKind & BoundFunction.FunctionKind.Static )
 					{
 						strTypeCast = "( " ~ strReturnType ~ "(*)" ~ strParameters ~ " )";
 					}
@@ -988,22 +1093,37 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 	string getFunctionPointerName( BoundFunction* func, size_t iIndex )
 	{
-		return "F_" ~ ( cast(string)func.strFunctionName ).replace( ".", "_" ) ~ iIndex.to!string;
+		string nonIndexed = "F_" ~ ( cast(string)func.strFunctionName ).replace( ".", "_" );
+		if( ( func.eFunctionKind & BoundFunction.FunctionKind.CodeGenerated ) == 0 )
+		{
+			return nonIndexed ~ iIndex.to!string;
+		}
+		return nonIndexed;
 	}
 
 	string getDelegateTypeName( BoundFunction* func, size_t iIndex )
 	{
-		return "D_" ~ ( cast(string)func.strFunctionName ).replace( ".", "" ) ~ iIndex.to!string;
+		string nonIndexed = "D_" ~ ( cast(string)func.strFunctionName ).replace( ".", "" );
+		if( ( func.eFunctionKind & BoundFunction.FunctionKind.CodeGenerated ) == 0 )
+		{
+			return nonIndexed ~ iIndex.to!string;
+		}
+		return nonIndexed;
 	}
 
 	string getPropertyName( BoundFunction* func, size_t iIndex )
 	{
-		return ( cast(string)func.strFunctionName ).replace( ".", "_" ) ~ iIndex.to!string;
+		string nonIndexed = ( cast(string)func.strFunctionName ).replace( ".", "_" );
+		if( ( func.eFunctionKind & BoundFunction.FunctionKind.CodeGenerated ) == 0 )
+		{
+			return nonIndexed ~ iIndex.to!string;
+		}
+		return nonIndexed;
 	}
 
 	string[] generateCSharpFunctionPointer( CSharpObject thisObj, BoundFunction* func, size_t iIndex, int depth )
 	{
-		bool bMemberFunc = func.eFunctionKind != BoundFunction.FunctionKind.Static;
+		bool bMemberFunc = !( func.eFunctionKind & BoundFunction.FunctionKind.Static );
 		string[] strParameterNames = func.CSharpParameterNamesWithQualifiers();
 
 		string strObjTabs = generateTabs( depth );
@@ -1016,7 +1136,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string[] strSplitApart = (cast(string)func.strFunctionSignature).split( '(' );
 		string strReturnType = strSplitApart[ 0 ];
 
-		strSplitApart = func.CSharpPrototype().split( '(' );
+		strSplitApart = func.CSharpMarshalledPrototype().split( '(' );
 		string strParameters = "(";
 		if( bMemberFunc )
 		{
@@ -1034,6 +1154,9 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string[] lines;
 
 		lines ~= strObjTabs ~ "// Function " ~ cast(string)func.strFunctionName;
+		//lines ~= strObjTabs ~ "// Signature " ~ cast(string)func.strFunctionSignature;
+		//lines ~= strObjTabs ~ "// Base prototype " ~ func.CSharpPrototype();
+		//lines ~= strObjTabs ~ "// Marshalled prototype " ~ func.CSharpMarshalledPrototype();
 		lines ~= strObjTabs ~ "public static ImportedFunction " ~ strImportedFuncVarName ~ ";";
 		lines ~= strObjTabs ~ "public delegate " ~ strReturnType ~ " " ~ strDelegateType ~ strParameters ~ ";";
 		lines ~= strObjTabs ~ "public static " ~ strDelegateType ~ " " ~ strPropertyName;
@@ -1047,7 +1170,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 	string[] generateCSharpForFunction( CSharpObject thisObj, BoundFunction* func, size_t iIndex, int depth )
 	{
-		bool bMemberFunc = func.eFunctionKind != BoundFunction.FunctionKind.Static;
+		bool bMemberFunc = !( func.eFunctionKind & BoundFunction.FunctionKind.Static );
 		string[] strParameterNames = func.CSharpParameterNamesWithQualifiers();
 
 		string[] lines;
@@ -1196,7 +1319,10 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 				lines ~= strObjTabs ~ "{";
 				foreach( iIndex, func; obj.arrFunctions )
 				{
-					lines ~= generateCSharpForFunction( obj, func, iIndex, depth + 1 );
+					if( ( func.eFunctionKind & BoundFunction.FunctionKind.CodeGenerated ) == 0 )
+					{
+						lines ~= generateCSharpForFunction( obj, func, iIndex, depth + 1 );
+					}
 				}
 				lines ~= strSeparatorTabs;
 				lines ~= Blank;
