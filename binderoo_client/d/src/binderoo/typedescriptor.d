@@ -76,6 +76,8 @@ struct TypeDescriptor( T, bool bIsRef = false )
 	alias			Type							= T;
 	enum			Name							= T.stringof;
 
+	enum			FullyQualifiedName				= binderoo.traits.FullTypeName!( T );
+
 	alias			UnqualifiedType					= Unqualified!( T );
 
 	enum			Size							= T.sizeof;
@@ -357,16 +359,18 @@ struct TypeString( T, bool bIsRef = false )
 		return TypeName;
 	}
 
-	static private string typeStringCSharp( )
+	static private string typeStringCSharp( bool bMarshalled )( )
 	{
+		enum ShouldReplace = bMarshalled && ( is( T == class ) || IsPointer!T );
+
 		static if( ( IsConst!( T ) || IsImmutable!( T ) )
 					&& bIsRef )
 		{
-			return "in " ~ CSharpFullTypeString!( Unqual!( T ) );
+			return "in " ~ ( ShouldReplace ? "IntPtr" : CSharpFullTypeString!( Unqual!( T ) ) );
 		}
 		else
 		{
-			return ( bIsRef ? "ref " : "" ) ~ CSharpFullTypeString!( T );
+			return ( bIsRef ? "ref " : "" ) ~ ( ShouldReplace ? "IntPtr" : CSharpFullTypeString!( T ) );
 		}
 	}
 	//------------------------------------------------------------------------
@@ -375,7 +379,8 @@ struct TypeString( T, bool bIsRef = false )
 	enum			DDecl							= typeStringD( T.stringof );
 	enum			CDecl							= typeStringC( CTypeString!( T ) );
 	enum			UnqualifiedCDecl				= unqualC( typeStringC( CTypeString!( T ) ) );
-	enum			CSharpDecl						= typeStringCSharp( );
+	enum			CSharpDecl						= typeStringCSharp!false( );
+	enum			CSharpMarshalledDecl			= typeStringCSharp!true( );
 }
 //----------------------------------------------------------------------------
 
