@@ -253,13 +253,14 @@ struct BoundObjectFunctions( Type )
 	static string[] generateCSharpVariables()
 	{
 		string[] strOutput;
-		static if( is( Type == struct ) )
-		{
-			import std.conv : to;
-			import binderoo.objectprivacy;
-			import binderoo.typedescriptor;
+		import std.conv : to;
+		import std.string : replace;
+		import binderoo.objectprivacy;
+		import binderoo.typedescriptor;
 
-			static foreach( var; Type.tupleof )
+		static foreach( var; Type.tupleof )
+		{
+			static if( is( Type == struct ) )
 			{
 				strOutput ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
 								~ PrivacyOf!var
@@ -270,10 +271,23 @@ struct BoundObjectFunctions( Type )
 								//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
 								~ ";";
 			}
+			else static if( is( Type == class ) && PrivacyOf!var == PrivacyLevel.Public )
+			{
+				strOutput ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
+				strOutput ~= "\t{";
+				strOutput ~= "\t\tget { return binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Getter( pObj.Ptr ); }";
+				static if( !IsConst!( typeof( var ) ) && !IsImmutable!( typeof( var ) ) )
+				{
+					strOutput ~= "\t\tset { binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Setter( pObj.Ptr, value ); }";
+				}
+				strOutput ~= "\t}";
+				strOutput ~= "";
+			}
 		}
-		else static if( is( Type == class ) )
+		
+		static if( is( Type == class ) )
 		{
-			strOutput ~= "\tImportedClass pObj;";
+			strOutput ~= "\tprivate ImportedClass pObj;";
 		}
 
 		return strOutput;
