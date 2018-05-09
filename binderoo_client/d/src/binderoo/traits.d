@@ -458,7 +458,13 @@ template IsTemplatedType( T : U[], U )
 }
 //----------------------------------------------------------------------------
 
-template IsTemplatedType( T : U!( Params ), alias U, Params... )
+template IsTemplatedType( alias T : U!( Params ), alias U, Params... )
+{
+	enum IsTemplatedType = true;
+}
+//----------------------------------------------------------------------------
+
+template IsTemplatedType( T : U!( Params ), alias U, Params )
 {
 	enum IsTemplatedType = true;
 }
@@ -470,9 +476,29 @@ template TemplateOf( T )
 }
 //----------------------------------------------------------------------------
 
+template TemplateOf( alias T : U!( Params ), alias U, Params... )
+{
+	alias TemplateOf = U;
+}
+//----------------------------------------------------------------------------
+
 template TemplateOf( T : U!( Params ), alias U, Params... )
 {
 	alias TemplateOf = U;
+}
+//----------------------------------------------------------------------------
+
+template IsBaseTemplate( alias Base, alias Instantiated : U!( Params ), alias U, Params... )
+{
+	static if( __traits( compiles, Base!Params ) )
+	{
+		// HORRIBLE HACK THANKS TO TEMPLATES THAT ARE EXACTLY THE SAME NOT MATCHING
+		enum IsBaseTemplate = Instantiated.stringof == Base!( Params ).stringof;
+	}
+	else
+	{
+		enum IsBaseTemplate = false;
+	}
 }
 //----------------------------------------------------------------------------
 
