@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module binderoo.scripting.scripting;
 //----------------------------------------------------------------------------
 
+version( NotDeprecated ) :
 public import binderoo.scripting.attributes;
 public import binderoo.functiondescriptor;
 public import binderoo.variabledescriptor;
