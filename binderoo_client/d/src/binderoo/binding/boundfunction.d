@@ -56,6 +56,11 @@ struct BoundFunctionFunctions( Descriptor )
 		return FunctionString!( Descriptor ).CSharpDecl;
 	}
 
+	static string CSharpMarshalledPrototype()
+	{
+		return FunctionString!( Descriptor ).CSharpMarshalledDecl;
+	}
+
 	static string[] ParameterNames()
 	{
 		string[] generate()
@@ -124,6 +129,23 @@ struct BoundFunctionFunctions( Descriptor )
 		return Types;
 	}
 
+	static string[] CSharpMarshalledParameterTypes()
+	{
+		string[] generate()
+		{
+			string[] output;
+			static foreach( param; Descriptor.ParametersAsTuple )
+			{
+				output ~= TypeString!( param.Type ).CSharpMarshalledDecl;
+			}
+			return output;
+		}
+
+		enum Types = generate();
+
+		return Types;
+	}
+
 	static string[] CSharpParameterNamesWithQualifiers()
 	{
 		string[] generate()
@@ -175,6 +197,7 @@ struct BoundFunction
 		Constructor			= 0x10,
 		Destructor			= 0x20,
 		Property			= 0x40,
+		CodeGenerated		= 0x80,
 		VirtualDestructor	= Virtual | Destructor,
 	}
 
@@ -212,10 +235,12 @@ struct BoundFunction
 	StringGen				CPrototype;
 	StringGen				DPrototype;
 	StringGen				CSharpPrototype;
+	StringGen				CSharpMarshalledPrototype;
 	StringArrayGen			ParameterNames;
 	StringArrayGen			CParameterTypes;
 	StringArrayGen			DParameterTypes;
 	StringArrayGen			CSharpParameterTypes;
+	StringArrayGen			CSharpMarshalledParameterTypes;
 	StringArrayGen			CSharpParameterNamesWithQualifiers;
 }
 //----------------------------------------------------------------------------

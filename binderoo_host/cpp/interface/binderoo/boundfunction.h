@@ -116,10 +116,12 @@ namespace binderoo
 		BoundFunctionDLangCall	CPrototype;
 		BoundFunctionDLangCall	DPrototype;
 		BoundFunctionDLangCall	CSharpPrototype;
+		BoundFunctionDLangCall	CSharpMarshalledPrototype;
 		BoundFunctionDLangCall	ParameterNames;
 		BoundFunctionDLangCall	CParameterTypes;
 		BoundFunctionDLangCall	DParameterTypes;
 		BoundFunctionDLangCall	CSharpParameterTypes;
+		BoundFunctionDLangCall	CSharpMarshalledParameterTypes;
 		BoundFunctionDLangCall	CSharpParameterNamesWithQualifiers;
 	};
 	//------------------------------------------------------------------------
