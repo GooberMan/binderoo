@@ -479,7 +479,7 @@ string GenerateBinderooCodeFromHeader( CHeader header )
 }
 
 @BindExport( 1 )
-extern( C++ ) void ListAllIncludes( const(char*) pHeaderBasePaths, const(char*) pHeaderFilename, const(char*) pPredefines )
+extern( C++ ) void ListAllIncludes( const(char)* pHeaderBasePaths, const(char)* pHeaderFilename, const(char)* pPredefines )
 {
 	import core.stdc.string : strlen;
 	import std.file : read, exists;
@@ -531,7 +531,7 @@ extern( C++ ) void ListAllIncludes( const(char*) pHeaderBasePaths, const(char*) 
 }
 
 @BindExport( 1 )
-extern( C++ ) void ParseAndGenerateBinderooCodeFromHeader( const(char*) pHeaderBasePaths, const(char*) pHeaderFilename, const(char*) pPredefines )
+extern( C++ ) void ParseAndGenerateBinderooCodeFromHeader( const(char)* pHeaderBasePaths, const(char)* pHeaderFilename, const(char)* pPredefines )
 {
 	import core.stdc.string : strlen;
 	import std.file : read, exists, write, mkdirRecurse;
