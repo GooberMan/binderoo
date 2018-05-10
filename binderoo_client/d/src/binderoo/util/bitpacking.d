@@ -193,7 +193,7 @@ string GenerateBitPackBody( Descriptor, string NameAlias )()
 				int iThisStartBit = ( iBitStart & 0x7 );
 				int iBitsThisAccess = min( iBitsLeft, 8 - iThisStartBit );
 				ubyte iThisMask = cast( ubyte )( BitMask( iBitsThisAccess ) << iThisStartBit );
-				ubyte iThisInvertMask = ~iThisMask;
+				ubyte iThisInvertMask = cast( ubyte )~cast(int)iThisMask;
 				int iTotalShift = abs( iBitsLeft - PackSizeUDA.iPackSize );
 
 				initialisers[ iThisArrayIndex ] = cast( ubyte )( ( initialisers[ iThisArrayIndex ] & iThisInvertMask ) | ( ( ( InitValue >> iTotalShift ) & BitMask( iBitsThisAccess ) ) << iThisStartBit ) );
