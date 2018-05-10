@@ -82,7 +82,8 @@ template HasUDA( T : A*, Attribute, A )
 
 template IsConst( T )
 {
-	enum IsConst = is( T == const( BaseT ), BaseT );
+	enum IsConst = is( T == const( BaseT ), BaseT )
+				|| is( T == const( BaseT )*, BaseT );
 }
 //----------------------------------------------------------------------------
 
@@ -376,7 +377,7 @@ template PointerTarget( T )
 
 template PointerTarget( T : A*, A )
 {
-	alias PointerTarget = PointerTarget!A;
+	alias PointerTarget = A;
 }
 //----------------------------------------------------------------------------
 
