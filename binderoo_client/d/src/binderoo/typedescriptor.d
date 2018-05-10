@@ -92,6 +92,7 @@ struct TypeDescriptor( T, bool bIsRef = false )
 	enum			IsStruct						= is( T == struct );
 	enum			IsClass							= is( T == class );
 	enum			IsInterface						= is( T == interface );
+	enum			IsUnion							= is( T == union );
 
 	enum			IsConst							= binderoo.traits.IsConst!( T );
 	enum			IsImmutable						= binderoo.traits.IsImmutable!( T );
@@ -299,13 +300,13 @@ template CTypeString( ulong val )
 
 template CSharpTypeString( T )
 {
-	static if( IsConst!( T ) || IsImmutable!( T ) )
-	{
-		enum CSharpTypeString = CSharpTypeString!( Unqual!( T ) );
-	}
-	else static if( IsPointer!( T ) )
+	static if( IsPointer!( T ) )
 	{
 		enum CSharpTypeString = "IntPtr"; //CSharpTypeString!( binderoo.traits.PointerTarget!( T ) ) ~ "*";
+	}
+	else static if( IsConst!( T ) || IsImmutable!( T ) )
+	{
+		enum CSharpTypeString = CSharpTypeString!( Unqual!( T ) );
 	}
 	else static if( IsUserType!( T ) )
 	{
