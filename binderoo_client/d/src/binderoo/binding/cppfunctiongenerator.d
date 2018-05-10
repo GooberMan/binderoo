@@ -60,7 +60,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 		static string generate()
 		{
 			// WHY DO I HAVE TO KEEP DOING THIS...
-			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nextern( %s ) static ";
+			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nexport extern( %s ) static ";
 			enum ExportDeclC = MangleBase.format( "c", "C" );
 			enum ExportDeclCPP = MangleBase.format( "cpp", "C++" );
 
@@ -145,7 +145,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 		static string generate( string AccessorType )()
 		{
 			// WHY DO I HAVE TO KEEP DOING THIS...
-			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ "_%s\" )\nextern( %s ) static ";
+			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ "_%s\" )\nexport extern( %s ) static ";
 			enum ExportDeclC = MangleBase.format( "c", AccessorType, "C" );
 			enum ExportDeclCPP = MangleBase.format( "cpp", AccessorType, "C++" );
 
