@@ -140,6 +140,8 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 
 	// The struct/class that contains the element we're interested in.
 	alias 					ObjectType				= void;
+	alias					Parent					= binderoo.traits.Alias!( __traits( parent, symbol ) );
+	//------------------------------------------------------------------------
 
 	enum					IsMemberFunction		= false;
 	enum					IsImplementedInType		= true;
@@ -159,10 +161,11 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 
 	alias					Type					= FunctionType;
 	alias					Name					= FunctionName;
+	alias					Symbol					= binderoo.traits.Alias!( symbol );
 	//------------------------------------------------------------------------
 
 	enum					ModuleName				= binderoo.traits.ModuleName!( symbol );
-	enum					FullyQualifiedName		= ModuleName ~ "." ~ Name; //FullTypeName!( symbol );
+	enum					FullyQualifiedName		= FullTypeName!( __traits( parent, symbol ) ) ~ "." ~ Name; //FullTypeName!( symbol );
 	//------------------------------------------------------------------------
 
 	private alias			ReturnDescriptor		= TypeDescriptor!( std.traits.ReturnType!( symbol ), ReturnsRef );
@@ -235,7 +238,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 		return FunctionSymbol( params );
 	}
 }
-
+//----------------------------------------------------------------------------
 
 struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 {
@@ -324,12 +327,13 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 
 	// The struct/class that contains the element we're interested in.
 	alias 					ObjectType				= T;
+	alias					Parent					= binderoo.traits.Alias!( __traits( parent, __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) );
+	//------------------------------------------------------------------------
 
 	enum					IsMemberFunction		= !is( T == void );
 	static if( IsMemberFunction )
 	{
-		alias 				FunctionParentType		= binderoo.traits.Alias!( __traits( parent, __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) );
-		enum				IsImplementedInType		= is( FunctionParentType == T );
+		enum				IsImplementedInType		= is( Parent == T );
 	}
 	else
 	{
@@ -351,6 +355,7 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 
 	alias					Type					= FunctionType;
 	alias					Name					= FunctionName;
+	alias					Symbol					= binderoo.traits.Alias!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
 	//------------------------------------------------------------------------
 
 	enum					ModuleName				= binderoo.traits.ModuleName!( T );
