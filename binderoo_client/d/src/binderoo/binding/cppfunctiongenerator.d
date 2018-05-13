@@ -75,6 +75,8 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 
 			string[] strParameters;
 			string[] strParameterNames;
+			string[] strWrapperDeclarators;
+
 			static if( Desc.IsMemberFunction )
 			{
 				static if( is( Desc.ObjectType == class ) )
@@ -87,10 +89,19 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 				}
 				strParameterNames ~= "pThis";
 			}
-			static foreach( Param; Desc.ParametersAsTuple )
+			static foreach( iIndex, Param; Desc.ParametersAsTuple )
 			{
-				strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
-				strParameterNames ~= Param.Name;
+				static if( Param.IsArray )
+				{
+					strWrapperDeclarators ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ "* _int_p" ~ iIndex.to!string ~ " = cast( " ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ "*)&" ~ Param.Name ~ ";";
+					strParameters ~= SliceOf!( Param.Type ).stringof ~ " " ~ Param.Name;
+					strParameterNames ~= "*_int_p" ~ iIndex.to!string;
+				}
+				else
+				{
+					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
+					strParameterNames ~= Param.Name;
+				}
 			}
 
 			strCOutput = ExportDeclC;
@@ -99,7 +110,14 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			{
 				strCPPOutput ~= "ref ";
 			}
-			appendToBoth( Desc.ReturnType.stringof );
+			static if( IsNonAssociativeArray!( Desc.ReturnType ) )
+			{
+				appendToBoth( SliceOf!( Desc.ReturnType ).stringof );
+			}
+			else
+			{
+				appendToBoth( Desc.ReturnType.stringof );
+			}
 			static if( Desc.ReturnsRef )
 			{
 				strCOutput ~= "*";
@@ -108,15 +126,15 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			appendToBoth( " " ~ FnName );
 			strCOutput ~= "CDecl";
 			strCPPOutput ~= "CPPDecl";
-			appendToBoth( "( " ~ strParameters.joinWith( ", " ) ~ " ) { " );
+			appendToBoth( "( " ~ strParameters.joinWith( ", " ) ~ " ) { " ~ strWrapperDeclarators.joinWith( " " ) ~ " " );
 			static if( Desc.HasReturnType )
 			{
-				appendToBoth( "return " );
-			}
+				static if( Desc.ReturnsRef )
+				{
+					appendToBoth( "ref " );
+				}
 
-			static if( Desc.ReturnsRef )
-			{
-				strCOutput ~= "&";
+				appendToBoth( Desc.ReturnType.stringof ~ " retval = " );
 			}
 
 			static if( Desc.IsMemberFunction )
@@ -130,7 +148,28 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 				appendToBoth( Desc.FullyQualifiedName );
 			}
 				
-			appendToBoth( "( " ~ strParameterNames[ ParamNameBaseIndex .. $ ].joinWith( ", " ) ~ " ); }" );
+			appendToBoth( "( " ~ strParameterNames[ ParamNameBaseIndex .. $ ].joinWith( ", " ) ~ " )" );
+			
+			static if( Desc.HasReturnType )
+			{
+				appendToBoth( "; return " );
+				static if( Desc.ReturnsRef )
+				{
+					strCOutput ~= "&";
+				}
+
+				static if( IsNonAssociativeArray!( Desc.ReturnType ) )
+				{
+					appendToBoth( "*( cast( " ~ SliceOf!( Desc.ReturnType ).stringof ~ "* )&" );
+				}
+				appendToBoth( "retval" );
+				static if( IsNonAssociativeArray!( Desc.ReturnType ) )
+				{
+					appendToBoth( " )" );
+				}
+			}
+
+			appendToBoth( "; }" );
 
 			return strCOutput ~ "\n" ~ strCPPOutput ~ "\nalias FuncCDecl = " ~ FnName ~ "CDecl;\nalias FuncCPPDecl = " ~ FnName ~ "CPPDecl;";
 		}
