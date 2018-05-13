@@ -39,11 +39,13 @@ namespace binderoo
 		{
 			m_pObj = binderoo_host_create_imported_class( strClassName );
 		}
+		//--------------------------------------------------------------------
 
 		public IntPtr Ptr
 		{
 			get { return binderoo_host_get_class_ptr( m_pObj ); }
 		}
+		//--------------------------------------------------------------------
 		
 #region InternalMagic
 		[ DllImport( "binderoo_host", CallingConvention = CallingConvention.Cdecl ) ]
