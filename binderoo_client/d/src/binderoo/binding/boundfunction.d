@@ -134,6 +134,7 @@ struct BoundFunctionFunctions( Descriptor )
 		string[] generate()
 		{
 			string[] output;
+
 			static foreach( param; Descriptor.ParametersAsTuple )
 			{
 				output ~= TypeString!( param.Type ).CSharpMarshalledDecl;
@@ -153,7 +154,14 @@ struct BoundFunctionFunctions( Descriptor )
 			string[] output;
 			static foreach( param; Descriptor.ParametersAsTuple )
 			{
-				output ~= ( param.IsRef ? "ref " : "" ) ~ param.Name;
+				static if( param.IsArray )
+				{
+					output ~= "new " ~ CSharpTypeString!( param.Type, MarshallingStage.Intermediary ) ~ "( " ~ param.Name ~ " ).SliceData";
+				}
+				else
+				{
+					output ~= ( param.IsRef || ( param.IsPointer && param.Descriptor.IsUserType ) ? "ref " : "" ) ~ param.Name;
+				}
 			}
 			return output;
 		}

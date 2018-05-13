@@ -27,26 +27,192 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 //----------------------------------------------------------------------------
 
+#if DEBUG
+	#define SliceFinalizerDebug
+#endif // DEBUG
+//----------------------------------------------------------------------------
+
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Diagnostics;
+using System.Linq;
 //----------------------------------------------------------------------------
 
 namespace binderoo
 {
-	[ StructLayout( LayoutKind.Explicit, Pack = 8 ) ]
-	struct DSlice< T >
+	internal static partial class Util
 	{
-		[ FieldOffset( 0 ) ] private size_t					uLength;
-		[ FieldOffset( 8 ) ] private IntPtr					pData;
+		// TODO: PROBABLY WON'T WORK ON MONO
+		[ DllImport( "msvcrt", EntryPoint = "memcpy", CallingConvention = CallingConvention.Cdecl, SetLastError = false ) ]
+		public static extern IntPtr memcpy(IntPtr dest, IntPtr src, UIntPtr count);
+
+		public static void Copy< T >( IntPtr dest, T[] src )
+		{
+			GCHandle srcP = GCHandle.Alloc( src, GCHandleType.Pinned );
+			UIntPtr len = new System.UIntPtr( (uint)( src.Length * Marshal.SizeOf( typeof( T ) ) ) );
+			Util.memcpy( dest, srcP.AddrOfPinnedObject(), len );
+			srcP.Free( );
+		}
+
+		public static void Copy< T >( T[] dest, IntPtr src )
+		{
+			GCHandle destP = GCHandle.Alloc( dest, GCHandleType.Pinned );
+			UIntPtr len = new System.UIntPtr( (uint)( dest.Length * Marshal.SizeOf( typeof( T ) ) ) );
+			Util.memcpy( destP.AddrOfPinnedObject(), src, len );
+			destP.Free( );
+		}
+	}
+
+	[ StructLayout( LayoutKind.Explicit, Pack = 8 ) ]
+	public struct SliceData
+	{
+		[ FieldOffset( 0 ) ] private ulong			uLength;
+		[ FieldOffset( 8 ) ] private IntPtr			pData;
+
+		public void		Set( IntPtr p, ulong l )
+		{
+			uLength = l;
+			pData = p;
+		}
+
+		public IntPtr	Pointer		{ get { return pData; } }
+		public int		Length		{ get { return (int)uLength; } }
+
+		public T[] Data< T >()
+		{
+			int dataSize = DataSizeInBytes< T >();
+			T[] data = new T[ Length ];
+			Util.Copy( data, Pointer );
+			return data;
+		}
+
+		public int DataSizeInBytes< T >()
+		{
+			return (int)uLength * Marshal.SizeOf( typeof( T ) );
+		}
+
+	}
+
+	public struct SliceDataWrapper
+	{
+		public SliceData			data;
+		public bool					bMarshalled;
+
+		public void Set( IntPtr p, ulong l, bool m )
+		{
+			Dispose();
+
+			data.Set( p, l );
+			bMarshalled = m;
+		}
+
+		public void Dispose()
+		{
+			if( bMarshalled )
+			{
+				Marshal.FreeHGlobal( data.Pointer );
+				this = new SliceDataWrapper();
+			}
+		}
+	}
+
+	public class SliceString : IDisposable
+	{
+		private SliceDataWrapper	sliceWrapper;
+
+		public SliceString( SliceData newData )
+		{
+			sliceWrapper = new SliceDataWrapper();
+			sliceWrapper.Set( newData.Pointer, (ulong)newData.Length, false );
+		}
+
+		public SliceString( string newData )
+		{
+			Data = newData;
+		}
+
+		~SliceString( ) { Dispose(); }
+
+		public SliceData SliceData
+		{
+			get { return sliceWrapper.data; }
+		}
+
+		public string Data
+		{
+			get
+			{
+				byte[] data = sliceWrapper.data.Data< byte >();
+				return Encoding.UTF8.GetString( data );
+			}
+
+			set
+			{
+				Dispose();
+				int iByteCount = Encoding.UTF8.GetByteCount( value );
+				byte[] data = new byte[ iByteCount + 1 ];
+				Encoding.UTF8.GetBytes( value, 0, value.Length, data, 0 );
+				IntPtr ptr = Marshal.AllocHGlobal( data.Length );
+				Marshal.Copy( data, 0, ptr, data.Length );
+				sliceWrapper.Set( ptr, (ulong)iByteCount, true );
+			}
+		}
+
+		public void Dispose()
+		{
+#if SliceFinalizerDebug
+			Debug.WriteLine( "Disposing " + this.GetType().ToString() + " (" + Data + ")..." );
+#endif // SliceFinalizerDebug
+			sliceWrapper.Dispose();
+		}
+	}
+
+	public class Slice< T > : IDisposable
+	{
+		private SliceDataWrapper	sliceWrapper;
+
+		public Slice( SliceData newData )
+		{
+			sliceWrapper = new SliceDataWrapper();
+			sliceWrapper.Set( newData.Pointer, (ulong)newData.Length, false );
+		}
+
+		public Slice( T[] newData )
+		{
+			Data = newData;
+		}
+
+		~Slice( ) { Dispose(); }
+
+		public SliceData SliceData
+		{
+			get { return sliceWrapper.data; }
+		}
 
 		public T[] Data
 		{
 			get
 			{
-				T[] data = new T[ uLength ];
-				Marshal.Copy( pData, data, 0, uLength );
-				return data;
+				return sliceWrapper.data.Data< T >();
 			}
+
+			set
+			{
+				Dispose();
+				int dataSize = value.Length * Marshal.SizeOf( typeof( T ) );
+				IntPtr ptr = Marshal.AllocHGlobal( dataSize );
+				Util.Copy( ptr, value );
+				sliceWrapper.Set( ptr, (ulong)value.Length, true );
+			}
+		}
+
+		public void Dispose()
+		{
+#if SliceFinalizerDebug
+			Debug.WriteLine( "Disposing " + this.GetType().ToString() + " (" + String.Join( ", ", Data.Select( f => f.ToString() ) ) + ")..." );
+#endif // SliceFinalizerDebug
+			sliceWrapper.Dispose();
 		}
 	}
 }

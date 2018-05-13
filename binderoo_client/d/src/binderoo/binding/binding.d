@@ -1041,10 +1041,9 @@ public string generateCPPStyleExportDeclarationsForAllObjects( string strVersion
 public string generateCSharpStyleImportDeclarationsForAllObjects( string strVersion )
 {
 	import std.stdio : writeln;
-	import std.array : split;
+	import std.array : split, replace;
 	import std.conv : to;
-
-	import std.array : replace;
+	import std.string : startsWith, endsWith;
 
 	class CSharpObject
 	{
@@ -1133,20 +1132,26 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string strDelegateType = getDelegateTypeName( func, iIndex );
 		string strPropertyName = getPropertyName( func, iIndex );
 
-		string[] strSplitApart = (cast(string)func.strFunctionSignature).split( '(' );
+		string strMarshalledPrototype = func.CSharpMarshalledPrototype();
+		if( strMarshalledPrototype.startsWith( "static " ) )
+		{
+			strMarshalledPrototype = strMarshalledPrototype[ 7 .. $ ];
+		}
+
+		string[] strSplitApart = strMarshalledPrototype.split( ' ' );
 		string strReturnType = strSplitApart[ 0 ];
 
-		strSplitApart = func.CSharpMarshalledPrototype().split( '(' );
+		strSplitApart = strMarshalledPrototype.split( '(' );
 		string strParameters = "(";
 		if( bMemberFunc )
 		{
 			if( thisObj.eType == CSharpObject.Type.Struct )
 			{
-				strParameters ~= " ref " ~ thisObj.strFullName ~ " pThis" ~ (strParameterNames.length > 0 ? "," : "");
+				strParameters ~= " ref " ~ thisObj.strFullName ~ " pThis" ~ ( strParameterNames.length > 0 ? "," : "" );
 			}
 			else
 			{
-				strParameters ~= " IntPtr pThis" ~ (strParameterNames.length > 0 ? "," : "");
+				strParameters ~= " IntPtr pThis" ~ ( strParameterNames.length > 0 ? "," : "" );
 			}
 		}
 		strParameters ~= strSplitApart[ 1 ];
@@ -1157,6 +1162,8 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		//lines ~= strObjTabs ~ "// Signature " ~ cast(string)func.strFunctionSignature;
 		//lines ~= strObjTabs ~ "// Base prototype " ~ func.CSharpPrototype();
 		//lines ~= strObjTabs ~ "// Marshalled prototype " ~ func.CSharpMarshalledPrototype();
+		//lines ~= strObjTabs ~ "// Parameter types " ~ func.CSharpParameterTypes().joinWith( ", " );
+		//lines ~= strObjTabs ~ "// Marshalled parameter types " ~ func.CSharpMarshalledParameterTypes().joinWith( ", " );
 		lines ~= strObjTabs ~ "public static ImportedFunction " ~ strImportedFuncVarName ~ ";";
 		lines ~= strObjTabs ~ "public delegate " ~ strReturnType ~ " " ~ strDelegateType ~ strParameters ~ ";";
 		lines ~= strObjTabs ~ "public static " ~ strDelegateType ~ " " ~ strPropertyName;
@@ -1180,7 +1187,13 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 		string strPropertyName = getPropertyName( func, iIndex );
 
-		string[] strSplitApart = (cast(string)func.strFunctionSignature).split( '(' );
+		string strPrototype = func.CSharpPrototype();
+		if( strPrototype.startsWith( "static " ) )
+		{
+			strPrototype = strPrototype[ 7 .. $ ];
+		}
+
+		string[] strSplitApart = strPrototype.split( ' ' );
 		string strReturnType = strSplitApart[ 0 ];
 
 		if( bMemberFunc )
@@ -1200,6 +1213,14 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		if( strReturnType == "void" )
 		{
 			lines ~= strContentTabs ~ "binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
+		}
+		else if( strReturnType == "string" )
+		{
+			lines ~= strContentTabs ~ "return new SliceString( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
+		}
+		else if( strReturnType.endsWith( "[]" ) )
+		{
+			lines ~= strContentTabs ~ "return new Slice< " ~ strReturnType[ 0 .. $ - 2 ] ~ "> ( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
 		}
 		else
 		{
