@@ -36,7 +36,7 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\src\DSlice.cs" />
+    <Compile Include="..\src\Slice.cs" />
     <Compile Include="..\src\Host.cs" />
     <Compile Include="..\src\ImportedClass.cs" />
     <Compile Include="..\src\ImportedFunction.cs" />
