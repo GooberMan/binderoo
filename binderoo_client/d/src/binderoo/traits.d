@@ -286,6 +286,12 @@ template IsStaticArray( A : T[ L ], T, size_t L )
 }
 //----------------------------------------------------------------------------
 
+template IsNonAssociativeArray( T )
+{
+	enum IsNonAssociativeArray = IsPlainArray!T || IsStaticArray!T;
+}
+//----------------------------------------------------------------------------
+
 template IsAssociativeArray( T )
 {
 	enum IsAssociativeArray = false;
@@ -389,6 +395,20 @@ template IsMutable( T )
 }
 //----------------------------------------------------------------------------
 
+template IsModule( alias Symbol )
+{
+	import std.algorithm.searching : startsWith;
+	enum IsModule = Symbol.stringof.startsWith( "module " );
+}
+//----------------------------------------------------------------------------
+
+template IsPackage( alias Symbol )
+{
+	import std.algorithm.searching : startsWith;
+	enum IsPackage = Symbol.stringof.startsWith( "package " );
+}
+//----------------------------------------------------------------------------
+
 template Unqualified( T )
 {
 	static if(		is( T A == immutable A )
@@ -450,6 +470,18 @@ template IsTemplatedType( T )
 	{
 		alias IsTemplatedType = IsTemplatedType!( Unqualified!( T ) );
 	}
+}
+//----------------------------------------------------------------------------
+
+template IsTemplatedType( alias T ) if( IsModule!T || IsPackage!T )
+{
+	enum IsTemplatedType = false;
+}
+//----------------------------------------------------------------------------
+
+template IsTemplatedType( alias T ) if( is( T == function ) )
+{
+	enum IsTemplatedType = false;
 }
 //----------------------------------------------------------------------------
 
