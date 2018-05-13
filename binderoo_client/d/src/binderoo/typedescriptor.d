@@ -298,15 +298,40 @@ template CTypeString( ulong val )
 }
 //----------------------------------------------------------------------------
 
-template CSharpTypeString( T )
+enum MarshallingStage
+{
+	Unmarshalled,
+	Intermediary,
+	Marshalled
+}
+
+template CSharpTypeString( T, MarshallingStage stage = MarshallingStage.Unmarshalled )
 {
 	static if( IsPointer!( T ) )
 	{
-		enum CSharpTypeString = "IntPtr"; //CSharpTypeString!( binderoo.traits.PointerTarget!( T ) ) ~ "*";
+		static if( IsUserType!( T ) )
+		{
+			enum CSharpTypeString = "ref " ~ CSharpTypeString!( binderoo.traits.PointerTarget!( T ) );
+		}
+		else
+		{
+			enum CSharpTypeString = "IntPtr";
+		}
 	}
 	else static if( IsConst!( T ) || IsImmutable!( T ) )
 	{
 		enum CSharpTypeString = CSharpTypeString!( Unqual!( T ) );
+	}
+	else static if( IsNonAssociativeArray!( T ) )
+	{
+		static if( is( T == immutable( char )[] ) || is( T == const( char )[] ) )
+		{
+			enum CSharpTypeString = stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "SliceString" : "string";
+		}
+		else
+		{
+			enum CSharpTypeString = stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "Slice< " ~ CSharpTypeString!( ArrayValueType!T ) ~ " >" : CSharpTypeString!( ArrayValueType!T ) ~ "[]";
+		}
 	}
 	else static if( IsUserType!( T ) )
 	{
@@ -329,9 +354,16 @@ template CSharpTypeString( T )
 	}
 }
 
-template CSharpFullTypeString( T )
+template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unmarshalled )
 {
-	enum CSharpFullTypeString = FullTypeName!T[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!T;
+	static if( IsPointer!T && IsUserType!( T ) )
+	{
+		enum CSharpFullTypeString = "ref " ~ CSharpFullTypeString!( binderoo.traits.PointerTarget!T, stage );
+	}
+	else
+	{
+		enum CSharpFullTypeString = FullTypeName!T[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!( T, stage );
+	}
 	//pragma( msg, T.stringof ~ " -> " ~ FullTypeName!T ~ " --> " ~ CSharpFullTypeString );
 }
 
@@ -360,18 +392,18 @@ struct TypeString( T, bool bIsRef = false )
 		return TypeName;
 	}
 
-	static private string typeStringCSharp( bool bMarshalled )( )
+	static private string typeStringCSharp( MarshallingStage stage )( )
 	{
-		enum ShouldReplace = bMarshalled && ( is( T == class ) || IsPointer!T );
+		enum ShouldReplaceWithPtr = stage == MarshallingStage.Marshalled && is( T == class );
 
 		static if( ( IsConst!( T ) || IsImmutable!( T ) )
 					&& bIsRef )
 		{
-			return "in " ~ ( ShouldReplace ? "IntPtr" : CSharpFullTypeString!( Unqual!( T ) ) );
+			return "in " ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqual!( T ), stage ) );
 		}
 		else
 		{
-			return ( bIsRef ? "ref " : "" ) ~ ( ShouldReplace ? "IntPtr" : CSharpFullTypeString!( T ) );
+			return ( bIsRef ? "ref " : "" ) ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( T, stage ) );
 		}
 	}
 	//------------------------------------------------------------------------
@@ -380,8 +412,8 @@ struct TypeString( T, bool bIsRef = false )
 	enum			DDecl							= typeStringD( T.stringof );
 	enum			CDecl							= typeStringC( CTypeString!( T ) );
 	enum			UnqualifiedCDecl				= unqualC( typeStringC( CTypeString!( T ) ) );
-	enum			CSharpDecl						= typeStringCSharp!false( );
-	enum			CSharpMarshalledDecl			= typeStringCSharp!true( );
+	enum			CSharpDecl						= typeStringCSharp!( MarshallingStage.Unmarshalled )( );
+	enum			CSharpMarshalledDecl			= typeStringCSharp!( MarshallingStage.Marshalled )( );
 }
 //----------------------------------------------------------------------------
 
