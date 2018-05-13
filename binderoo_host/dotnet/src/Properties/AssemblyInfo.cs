@@ -35,7 +35,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("binderoo_host_dotnet")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Binderoo Host .NET wrapper")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("binderoo_host_dotnet")]
