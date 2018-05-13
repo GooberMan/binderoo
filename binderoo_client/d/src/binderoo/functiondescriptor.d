@@ -201,6 +201,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 		enum				IsConst					= Descriptor.IsConst;
 		enum				IsRef					= Descriptor.IsRef;
 		enum				IsPointer				= Descriptor.IsPointer;
+		enum				IsArray					= Descriptor.IsArray;
 	}
 	//------------------------------------------------------------------------
 
@@ -395,6 +396,8 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 		enum				IsConst					= Descriptor.IsConst;
 		enum				IsRef					= Descriptor.IsRef;
 		enum				IsPointer				= Descriptor.IsPointer;
+		enum				IsArray					= Descriptor.IsArray;
+
 	}
 	//------------------------------------------------------------------------
 
@@ -611,7 +614,7 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 		package enum		FullyQualifiedDDecl			= TypeString!( BaseParam.Descriptor ).FullyQualifiedDDecl ~ " " ~ BaseParam.Name;
 		package enum		CDecl						= TypeString!( BaseParam.Descriptor ).CDecl ~ ( BaseParam.Descriptor.IsClass ? "* " : " " ) ~ BaseParam.Name;
 		package enum		CSharpDecl					= TypeString!( BaseParam.Descriptor ).CSharpDecl ~ " " ~ BaseParam.Name;
-		package enum		CSharpMarshalledDecl		= ( ( BaseParam.Descriptor.IsClass || BaseParam.Descriptor.IsPointer ) ? "IntPtr" : TypeString!( BaseParam.Descriptor ).CSharpDecl ) ~ " " ~ BaseParam.Name;
+		package enum		CSharpMarshalledDecl		= ( BaseParam.Descriptor.IsClass ? "IntPtr" : BaseParam.Descriptor.IsArray ? "SliceData" : TypeString!( BaseParam.Descriptor ).CSharpDecl ) ~ " " ~ BaseParam.Name;
 	}
 	//------------------------------------------------------------------------
 
