@@ -60,6 +60,31 @@ struct Slice( Type )
 alias DString = Slice!( immutable( char ) );
 //----------------------------------------------------------------------------
 
+template SliceOf( OriginalType )
+{
+	template Impl( Type )
+	{
+		static if( IsNonAssociativeArray!Type )
+		{
+			alias Impl = Slice!( Impl!( ArrayValueType!Type ) );
+		}
+		else
+		{
+			alias Impl = Type;
+		}
+	}
+
+	static if( IsNonAssociativeArray!OriginalType )
+	{
+		alias SliceOf = Slice!( Impl!( ArrayValueType!OriginalType ) );
+	}
+	else
+	{
+		alias SliceOf = void;
+	}
+}
+//----------------------------------------------------------------------------
+
 auto toSliceRecursive( A : T[], T )( A array )
 {
 	static if( is( T : ST[], ST ) )
