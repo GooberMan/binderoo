@@ -723,33 +723,41 @@ void binderoo::HostImplementation::collectDynamicLibraries()
 		}
 		else
 		{
+			InternalString strNotification;
 			switch( errno )
 			{
 			case EACCES:
-				logError( "s: Permission denied." ); //, strSearchPath.c_str() );
+				strNotification = strSearchPath;
+				strNotification += "s: Permission denied.";
 				break;
 			case EBADF:
-				logError( "fd is not a valid file descriptor opened for reading." );
+				strNotification = "fd is not a valid file descriptor opened for reading.";
 				break;
 			case EMFILE:
-				logError( "The per-process limit on the number of open file descriptors has been reached." );
+				strNotification = "The per-process limit on the number of open file descriptors has been reached.";
 				break;
 			case ENFILE:
-				logError( "The system-wide limit on the total number of open files has been reached." );
+				strNotification = "The system-wide limit on the total number of open files has been reached.";
 				break;
 			case ENOENT:
-				logError( "\"s\" does not exist, or is an empty string." ); //, strSearchPath.c_str() );
+				strNotification = "\"";
+				strNotification += strSearchPath;
+				strNotification += "\" does not exist, or is an empty string.";
 				break;
 			case ENOMEM:
-				logError( "Insufficient memory to complete the directory search operation." );
+				strNotification = "Insufficient memory to complete the directory search operation.";
 				break;
 			case ENOTDIR:
-				logError( "\"s\" is not a directory." ); //, strSearchPath.c_str() );
+				strNotification = "\"";
+				strNotification += strSearchPath;
+				strNotification += "\" is not a directory.";
 				break;
 			default:
-				logError( "Unspecified error opening folder for search" );
+				strNotification = "Unspecified error opening folder for search";
 				break;
 			}
+
+			logError( strNotification.c_str() );
 		}
 #endif
 	}
