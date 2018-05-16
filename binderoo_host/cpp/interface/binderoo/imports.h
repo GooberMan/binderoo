@@ -25,7 +25,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-//----------------------------------------------------------------------------
+/*--------------------------------------------------------------------------*/
 
 #if defined( __cplusplus )
 	#pragma once
@@ -33,9 +33,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #if !defined( _BINDEROO_IMPORTS_H_ )
 #define _BINDEROO_IMPORTS_H_
-//----------------------------------------------------------------------------
+/*--------------------------------------------------------------------------*/
 
-#if !defined( BIND_HOST_C_API_ONLY )
+#if BIND_API_LANGUAGE == BIND_API_LANGUAGE_CPP
 
 #include "binderoo/defs.h"
 
@@ -427,7 +427,7 @@ namespace binderoo
 }
 //----------------------------------------------------------------------------
 
-#endif // !defined( BIND_HOST_C_API_ONLY )
+#endif /* BIND_API_LANGUAGE == BIND_API_LANGUAGE_CPP */
 
 BIND_C_API_BEGIN
 	typedef void* binderoo_imported_function_t;
@@ -444,8 +444,8 @@ BIND_C_API_BEGIN
 	void							BIND_DLL binderoo_host_release_imported_class( binderoo_imported_class_t pObj );
 	binderoo_class_ptr_t			BIND_DLL binderoo_host_get_class_ptr( binderoo_imported_class_t pObj );
 BIND_C_API_END
-//----------------------------------------------------------------------------
+/*--------------------------------------------------------------------------*/
 
-#endif // _BINDEROO_IMPORTS_H_
+#endif /* _BINDEROO_IMPORTS_H_ */
 
-//============================================================================
+/*==========================================================================*/

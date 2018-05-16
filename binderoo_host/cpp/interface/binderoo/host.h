@@ -25,7 +25,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-//----------------------------------------------------------------------------
+/*--------------------------------------------------------------------------*/
 
 #if defined( __cplusplus )
 	#pragma once
@@ -33,9 +33,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #if !defined( _BINDEROO_HOST_H_ )
 #define _BINDEROO_HOST_H_
-//----------------------------------------------------------------------------
+/*--------------------------------------------------------------------------*/
 
-#if !defined( BIND_HOST_C_API_ONLY )
+#if BIND_API_LANGUAGE == BIND_API_LANGUAGE_CPP
 
 #include "binderoo/defs.h"
 #include "binderoo/slice.h"
@@ -170,7 +170,7 @@ namespace binderoo
 }
 //----------------------------------------------------------------------------
 
-#endif // BIND_HOST_C_API_ONLY
+#endif /* BIND_API_LANGUAGE == BIND_API_LANGUAGE_CPP */
 
 BIND_C_API_BEGIN
 	typedef void* binderoo_host_t;
@@ -179,6 +179,6 @@ BIND_C_API_BEGIN
 	void				BIND_DLL binderoo_host_destroy( binderoo_host_t* pHost );
 BIND_C_API_END
 
-#endif // !defined( _BINDEROO_HOST_H_ )
+#endif /* !defined( _BINDEROO_HOST_H_ ) */
 
-//============================================================================
+/*==========================================================================*/

@@ -25,7 +25,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-//----------------------------------------------------------------------------
+/*--------------------------------------------------------------------------*/
 
 #if defined( __cplusplus )
 	#pragma once
@@ -36,7 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "binderoo/defs.h"
 #include "binderoo/imports.h"
-//----------------------------------------------------------------------------
+/*--------------------------------------------------------------------------*/
 
-#endif // _BINDEROO_HOST_C_API_H_
-//============================================================================
+#endif /* _BINDEROO_HOST_C_API_H_ */
+//*=========================================================================*/
