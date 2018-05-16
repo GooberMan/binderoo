@@ -6,12 +6,15 @@ set( CMAKE_CXX_STANDARD 14 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 set( CMAKE_CXX_EXTENSIONS OFF )
 
-cmake_minimum_required( VERSION 3.5.0 )
+cmake_minimum_required( VERSION 3.3.0 )
 
 project( binderoo_util )
 
 # Hack from https://stackoverflow.com/questions/11944060/how-to-detect-target-architecture-using-cmake
 execute_process( COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE )
+# execute_process( COMMAND lsb_release -is COMMAND tr -d '\n' OUTPUT_VARIABLE DISTRO_ID )
+# execute_process( COMMAND lsb_release -cs COMMAND tr -d '\n' OUTPUT_VARIABLE DISTRO_CODENAME )
+# message( "Outputting binderoo_util to bin/" ${CMAKE_SYSTEM_NAME} "/binderoo_host/" ${ARCHITECTURE} "/" ${CMAKE_BUILD_TYPE} )
 
 file( GLOB_RECURSE BINDEROO_UTIL_SOURCE  	RELATIVE 	${PROJECT_SOURCE_DIR}
 														${PROJECT_SOURCE_DIR}/../../../src/util/*.cpp )
@@ -21,7 +24,7 @@ include_directories( 	${PROJECT_SOURCE_DIR}/../../../../../binderoo_common/cpp/i
 						${PROJECT_SOURCE_DIR}/../../../src/util )
 
 
-set( BINDEROO_BINARY_DIRECTORY ${PROJECT_SOURCE_DIR}/../../../../../bin/${CMAKE_SYSTEM_NAME}/${ARCHITECTURE} )
+set( BINDEROO_BINARY_DIRECTORY ${PROJECT_SOURCE_DIR}/../../../../../bin/${CMAKE_SYSTEM_NAME}/binderoo_host/${ARCHITECTURE}/${CMAKE_BUILD_TYPE} )
 
 set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${BINDEROO_BINARY_DIRECTORY} )
 set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${BINDEROO_BINARY_DIRECTORY} )
