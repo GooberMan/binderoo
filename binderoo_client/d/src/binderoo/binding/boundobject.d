@@ -252,7 +252,9 @@ struct BoundObjectFunctions( Type )
 
 	static string[] generateCSharpVariables()
 	{
-		string[] strOutput;
+		string[] strVariables;
+		string[] strProperties;
+
 		import std.conv : to;
 		import std.string : replace;
 		import binderoo.objectprivacy;
@@ -262,35 +264,60 @@ struct BoundObjectFunctions( Type )
 		{
 			static if( is( Type == struct ) )
 			{
-				strOutput ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
-								~ PrivacyOf!var
+				strVariables ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
+								~ "private "
+								~ CSharpFullTypeString!( typeof( var ), MarshallingStage.Marshalled )
 								~ " "
-								~ CSharpFullTypeString!( typeof( var ) )
-								~ " "
-								~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : __traits( identifier, var ) )
+								~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
 								//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
 								~ ";";
+
+				static if( IsExternallyAccessible!var )
+				{
+					strProperties ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
+					strProperties ~= "\t{";
+					static if( is( typeof( var ) == string ) )
+					{
+						strProperties ~= "\t\tget { return new SliceString( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
+						static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";
+					}
+					else static if( IsNonAssociativeArray!( typeof( var ) ) )
+					{
+						strProperties ~= "\t\tget { return new Slice< " ~ CSharpFullTypeString!( typeof( var ) ) ~ " >( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
+						static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";
+					}
+					else
+					{
+						strProperties ~= "\t\tget { return var_" ~ __traits( identifier, var ) ~ "; }";
+						static if( IsMutable!( typeof( var ) ) )
+						{
+							strProperties ~= "\t\tset { var_" ~ __traits( identifier, var ) ~ " = value; }";
+						}
+					}
+					strProperties ~= "\t}";
+					strProperties ~= "";
+				}
 			}
 			else static if( is( Type == class ) && PrivacyOf!var == PrivacyLevel.Public )
 			{
-				strOutput ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
-				strOutput ~= "\t{";
-				strOutput ~= "\t\tget { return binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Getter( pObj.Ptr ); }";
-				static if( !IsConst!( typeof( var ) ) && !IsImmutable!( typeof( var ) ) )
+				strProperties ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
+				strProperties ~= "\t{";
+				strProperties ~= "\t\tget { return binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Getter( pObj.Ptr ); }";
+				static if( IsMutable!( typeof( var ) ) )
 				{
-					strOutput ~= "\t\tset { binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Setter( pObj.Ptr, value ); }";
+					strProperties ~= "\t\tset { binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Setter( pObj.Ptr, value ); }";
 				}
-				strOutput ~= "\t}";
-				strOutput ~= "";
+				strProperties ~= "\t}";
+				strProperties ~= "";
 			}
 		}
 		
 		static if( is( Type == class ) )
 		{
-			strOutput ~= "\tprivate ImportedClass pObj;";
+			strVariables ~= "\tprivate ImportedClass pObj;";
 		}
 
-		return strOutput;
+		return strProperties ~ strVariables;
 	}
 }
 //----------------------------------------------------------------------------
