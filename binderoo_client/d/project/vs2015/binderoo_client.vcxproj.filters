@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="binderoo">
+      <UniqueIdentifier>{49d97fcb-c410-44e0-bf9b-810daffe42cd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="binderoo\binding">
+      <UniqueIdentifier>{db105e1c-bd70-4e21-a1b7-a62be9dee55f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="binderoo\util">
+      <UniqueIdentifier>{52825ab6-0419-4e92-aab7-b4306c240e07}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <DCompile Include="..\..\src\binderoo\descriptorsearch.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\functiondescriptor.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\hash.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\objectprivacy.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\slice.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\traits.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\typedescriptor.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\variabledescriptor.d">
+      <Filter>binderoo</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\attributes.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\binding.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\boundenum.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\boundfunction.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\boundmodule.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\boundobject.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\cheaderobjects.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\cheaderparsing.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\cppfunctiongenerator.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\functionstub.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\inheritance.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\mangler.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\serialise.d">
+      <Filter>binderoo\binding</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\util\atomic.d">
+      <Filter>binderoo\util</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\util\bitpacking.d">
+      <Filter>binderoo\util</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\util\builtin.d">
+      <Filter>binderoo\util</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\util\structofarrays.d">
+      <Filter>binderoo\util</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo_client.d" />
+    <DCompile Include="..\..\src\binderoo\util\enumoptions.d">
+      <Filter>binderoo\util</Filter>
+    </DCompile>
+  </ItemGroup>
+</Project>
