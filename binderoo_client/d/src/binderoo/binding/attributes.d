@@ -32,94 +32,13 @@ module binderoo.binding.attributes;
 
 struct BindIgnore { }
 struct BindNoExportObject { }
-struct BindNoSerialise { }
 //----------------------------------------------------------------------------
 
-// Used internally. Avoid using yourself.
-struct BindRawImport
+// Entire object or single variable not suitable for serialisation? Then
+// mark it up with this UDA and Binderoo will ignore it
+struct BindNoSerialise
 {
-	enum FunctionKind : short
-	{
-		Invalid = -1,
-		Static,
-		Method,
-		Virtual,
-		Constructor,
-		Destructor,
-		VirtualDestructor,
-	}
-
-	string			strCName;
-	string			strCSignature;
-	string[]		strIncludeVersions;
-	string[]		strExcludeVersions;
-	FunctionKind	eKind = FunctionKind.Invalid;
-	bool			bIsConst;
-	bool			bOwnerIsAbstract;
-	ulong			uNameHash;
-	ulong			uSignatureHash;
-	int				iOrderInTable			= 0;
-	int				iIntroducedVersion		= -1;
-	int				iMaxVersion				= -1;
-
-	this( string name, string signature, string[] includeVersions, string[] excludeVersions, FunctionKind kind, int orderInTable, bool isConst, bool ownerIsAbstract, int introducedVersion = -1, int maxVersion = -1 )
-	{
-		import binderoo.hash;
-
-		strCName						= name;
-		strCSignature					= signature;
-		strIncludeVersions				= includeVersions;
-		strExcludeVersions				= excludeVersions;
-		eKind							= kind;
-		bIsConst						= isConst;
-		bOwnerIsAbstract				= ownerIsAbstract;
-		uNameHash						= fnv1a_64( name );
-		uSignatureHash					= fnv1a_64( signature );
-		iOrderInTable					= orderInTable;
-		iIntroducedVersion				= introducedVersion;
-		iMaxVersion						= maxVersion;
-	}
-
-	this( string name, string signature, string[] includeVersions, string[] excludeVersions, FunctionKind kind, bool isConst, bool ownerIsAbstract, ulong nameHash, ulong signatureHash, int orderInTable, int introducedVersion, int maxVersion )
-	{
-		strCName						= name;
-		strCSignature					= signature;
-		strIncludeVersions				= includeVersions;
-		strExcludeVersions				= excludeVersions;
-		eKind							= kind;
-		bIsConst						= isConst;
-		bOwnerIsAbstract				= ownerIsAbstract;
-		uNameHash						= nameHash;
-		uSignatureHash					= signatureHash;
-		iOrderInTable					= orderInTable;
-		iIntroducedVersion				= introducedVersion;
-		iMaxVersion						= maxVersion;
-	}
-
-	string toUDAString()
-	{
-		import std.conv : to;
-		return "@BindRawImport(\""	~ strCName ~ "\", \"" ~ strCSignature ~ "\", "
-									~ "cast(string[])" ~ strIncludeVersions.to!string ~ ", "
-									~ "cast(string[])" ~ strExcludeVersions.to!string ~ ", "
-									~ "BindRawImport.FunctionKind." ~ eKind.to!string ~ ", "
-									~ bIsConst.to!string ~ ", "
-									~ bOwnerIsAbstract.to!string ~ ", "
-									~ uNameHash.to!string ~ "UL, "
-									~ uSignatureHash.to!string ~ "UL, "
-									~ iOrderInTable.to!string ~ ", "
-									~ iIntroducedVersion.to!string ~ ", "
-									~ iMaxVersion.to!string ~ ")";
-	}
 }
-//----------------------------------------------------------------------------
-
-// Used internally. Avoid using yourself.
-struct BindOverrides
-{
-	string strFunctionName;
-}
-//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
 // A function marked with BindDisallow will not define the wrapper function
@@ -224,7 +143,95 @@ struct BindBinaryMatch
 {
 }
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 
+// Used internally. Avoid using yourself.
+struct BindRawImport
+{
+	enum FunctionKind : short
+	{
+		Invalid = -1,
+		Static,
+		Method,
+		Virtual,
+		Constructor,
+		Destructor,
+		VirtualDestructor,
+	}
+
+	string			strCName;
+	string			strCSignature;
+	string[]		strIncludeVersions;
+	string[]		strExcludeVersions;
+	FunctionKind	eKind = FunctionKind.Invalid;
+	bool			bIsConst;
+	bool			bOwnerIsAbstract;
+	ulong			uNameHash;
+	ulong			uSignatureHash;
+	int				iOrderInTable			= 0;
+	int				iIntroducedVersion		= -1;
+	int				iMaxVersion				= -1;
+
+	this( string name, string signature, string[] includeVersions, string[] excludeVersions, FunctionKind kind, int orderInTable, bool isConst, bool ownerIsAbstract, int introducedVersion = -1, int maxVersion = -1 )
+	{
+		import binderoo.hash;
+
+		strCName						= name;
+		strCSignature					= signature;
+		strIncludeVersions				= includeVersions;
+		strExcludeVersions				= excludeVersions;
+		eKind							= kind;
+		bIsConst						= isConst;
+		bOwnerIsAbstract				= ownerIsAbstract;
+		uNameHash						= fnv1a_64( name );
+		uSignatureHash					= fnv1a_64( signature );
+		iOrderInTable					= orderInTable;
+		iIntroducedVersion				= introducedVersion;
+		iMaxVersion						= maxVersion;
+	}
+
+	this( string name, string signature, string[] includeVersions, string[] excludeVersions, FunctionKind kind, bool isConst, bool ownerIsAbstract, ulong nameHash, ulong signatureHash, int orderInTable, int introducedVersion, int maxVersion )
+	{
+		strCName						= name;
+		strCSignature					= signature;
+		strIncludeVersions				= includeVersions;
+		strExcludeVersions				= excludeVersions;
+		eKind							= kind;
+		bIsConst						= isConst;
+		bOwnerIsAbstract				= ownerIsAbstract;
+		uNameHash						= nameHash;
+		uSignatureHash					= signatureHash;
+		iOrderInTable					= orderInTable;
+		iIntroducedVersion				= introducedVersion;
+		iMaxVersion						= maxVersion;
+	}
+
+	string toUDAString()
+	{
+		import std.conv : to;
+		return "@BindRawImport(\""	~ strCName ~ "\", \"" ~ strCSignature ~ "\", "
+									~ "cast(string[])" ~ strIncludeVersions.to!string ~ ", "
+									~ "cast(string[])" ~ strExcludeVersions.to!string ~ ", "
+									~ "BindRawImport.FunctionKind." ~ eKind.to!string ~ ", "
+									~ bIsConst.to!string ~ ", "
+									~ bOwnerIsAbstract.to!string ~ ", "
+									~ uNameHash.to!string ~ "UL, "
+									~ uSignatureHash.to!string ~ "UL, "
+									~ iOrderInTable.to!string ~ ", "
+									~ iIntroducedVersion.to!string ~ ", "
+									~ iMaxVersion.to!string ~ ")";
+	}
+}
+//----------------------------------------------------------------------------
+
+// Used internally. Avoid using yourself.
+struct BindOverrides
+{
+	string strFunctionName;
+}
+//----------------------------------------------------------------------------
+
+// Used internally. Avoid using yourself.
 struct InheritanceBase
 {
 }
