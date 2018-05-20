@@ -306,6 +306,10 @@ template IsAssociativeArray( A : T[ E ], T, E )
 
 template IsSomeType( T )
 {
+	static if( IsAggregateType!T )
+	{
+		mixin( "import " ~ ModuleName!T ~ ";" );
+	}
 	import std.traits : isFunctionPointer;
 	enum IsSomeType = !isFunctionPointer!( T );
 }
@@ -323,10 +327,14 @@ template IsSomeType( T : void )
 }
 //----------------------------------------------------------------------------
 
-template IsSomeType( alias symbol )
+template IsSomeType( alias Symbol )
 {
+	static if( IsAggregateType!Symbol )
+	{
+		mixin( "import " ~ ModuleName!Symbol ~ ";" );
+	}
 	import std.traits : isFunctionPointer;
-	enum IsSomeType = is( symbol ) && !isFunctionPointer!( symbol );
+	enum IsSomeType = is( Symbol ) && !isFunctionPointer!( Symbol );
 }
 //----------------------------------------------------------------------------
 
@@ -397,15 +405,29 @@ template IsMutable( T )
 
 template IsModule( alias Symbol )
 {
-	import std.algorithm.searching : startsWith;
-	enum IsModule = Symbol.stringof.startsWith( "module " );
+	static if( isSomeFunction!Symbol )
+	{
+		enum IsModule = false;
+	}
+	else
+	{
+		import std.algorithm.searching : startsWith;
+		enum IsModule = Symbol.stringof.startsWith( "module " );
+	}
 }
 //----------------------------------------------------------------------------
 
 template IsPackage( alias Symbol )
 {
-	import std.algorithm.searching : startsWith;
-	enum IsPackage = Symbol.stringof.startsWith( "package " );
+	static if( isSomeFunction!Symbol )
+	{
+		enum IsPackage = false;
+	}
+	else
+	{
+		import std.algorithm.searching : startsWith;
+		enum IsPackage = Symbol.stringof.startsWith( "package " );
+	}
 }
 //----------------------------------------------------------------------------
 
@@ -558,11 +580,33 @@ template Alias( alias A )
 {
 	alias Alias = A;
 }
+//----------------------------------------------------------------------------
 
 /+template TypeTuple( T... ) if( T.length > 0 )
 {
 	alias TypeTuple = T;
 }+/
+//----------------------------------------------------------------------------
+
+template ModuleOf( alias Symbol )
+{
+	import std.algorithm.searching : startsWith;
+
+	static if( IsModule!Symbol || IsPackage!Symbol )
+	{
+		alias ModuleOf = Symbol;
+	}
+	else
+	{
+		alias ModuleOf = ModuleOf!( __traits( parent, Symbol ) );
+	}
+}
+//----------------------------------------------------------------------------
+
+template ModuleFromName( string strModuleName )
+{
+	mixin( "import " ~ strModuleName ~ "; alias ModuleFromName = binderoo.traits.Alias!( " ~ strModuleName ~ " );" );
+}
 //----------------------------------------------------------------------------
 
 string FullTypeName( Symbol )()
@@ -623,8 +667,7 @@ string ModuleLocalTypeName( alias Symbol )()
 {
 	import std.algorithm.searching : startsWith;
 
-	static if( Symbol.stringof.startsWith( "module " )
-			|| Symbol.stringof.startsWith( "package " ) )
+	static if( IsModule!Symbol || IsPackage!Symbol )
 	{
 		return "";
 	}
@@ -645,8 +688,8 @@ string ModuleLocalTypeName( alias Symbol )()
 		}
 		else static if( __traits( compiles, __traits( parent, Symbol ) ) )
 		{
-			static if( __traits( parent, Symbol ).stringof.startsWith( "module " )
-					|| __traits( parent, Symbol ).stringof.startsWith( "package " ) )
+			static if( IsModule!( __traits( parent, Symbol ) )
+					|| IsPackage!( __traits( parent, Symbol ) ) )
 			{
 				return Symbol.stringof;
 			}
@@ -667,14 +710,18 @@ string ModuleName( alias Symbol )()
 {
 	import std.algorithm.searching : startsWith;
 
-	static if( __traits( compiles, __traits( parent, Symbol ) ) )
+	static if( IsModule!Symbol || IsPackage!Symbol )
+	{
+		return FullTypeName!Symbol;
+	}
+	else static if( __traits( compiles, __traits( parent, Symbol ) ) )
 	{
 		alias Parent = Alias!( __traits( parent, Symbol ) );
 
 		static if( is( Symbol ) && IsTemplatedType!Symbol )
 		{
-			static if( __traits( parent, TemplateOf!( Symbol ) ).stringof.startsWith( "module " ) 
-				|| __traits( parent, TemplateOf!( Symbol ) ).stringof.startsWith( "package " ) )
+			static if( IsModule!( __traits( parent, TemplateOf!( Symbol ) ) )
+				|| IsPackage!( __traits( parent, TemplateOf!( Symbol ) ) ) )
 			{
 				return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) );
 			}
@@ -684,8 +731,7 @@ string ModuleName( alias Symbol )()
 			}
 				
 		}
-		else static if( Parent.stringof.startsWith( "module " ) 
-				|| Parent.stringof.startsWith( "package " ) )
+		else static if( IsModule!Parent || IsPackage!Parent )
 		{
 			return FullTypeName!( __traits( parent, Symbol ) );
 		}
@@ -694,8 +740,6 @@ string ModuleName( alias Symbol )()
 			return ModuleName!( __traits( parent, Symbol ) );
 		}
 	}
-
-	return "";
 }
 //----------------------------------------------------------------------------
 
