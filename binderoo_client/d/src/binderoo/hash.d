@@ -30,6 +30,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module binderoo.hash;
 //----------------------------------------------------------------------------
 
+import binderoo.traits : IsNonAssociativeArray, ArrayValueType;
+//----------------------------------------------------------------------------
+
 // FNV-1 and FNV-1a implementations.
 // https://en.wikipedia.org/wiki/Fowler-Noll-Vo_hash_function
 //----------------------------------------------------------------------------
@@ -42,8 +45,11 @@ enum ulong FNV1Prime64 = 1099511628211LU;
 //----------------------------------------------------------------------------
 
 // Implementation guts
-auto fnv1( T, T HashBasis, T HashPrime )( string inputVal ) pure nothrow @safe
+auto fnv1( alias HashBasis, alias HashPrime, A )( A inputVal ) pure nothrow @safe if( IsNonAssociativeArray!A && ArrayValueType!A.sizeof == 1 )
 {
+	static assert( is( typeof( HashBasis ) == typeof( HashPrime ) ), typeof( HashBasis ).stringof ~ " does not match " ~ typeof( HashPrime ).stringof );
+	alias T = typeof( HashBasis );
+
 	auto outputVal = HashBasis; // basis
 	foreach( component; inputVal )
 	{
@@ -54,8 +60,11 @@ auto fnv1( T, T HashBasis, T HashPrime )( string inputVal ) pure nothrow @safe
 }
 //----------------------------------------------------------------------------
 
-auto fnv1a( T, T HashBasis, T HashPrime )( string inputVal ) pure nothrow @safe
+auto fnv1a( alias HashBasis, alias HashPrime, A )( A inputVal ) pure nothrow @safe if( IsNonAssociativeArray!A && ArrayValueType!A.sizeof == 1 )
 {
+	static assert( is( typeof( HashBasis ) == typeof( HashPrime ) ), typeof( HashBasis ).stringof ~ " does not match " ~ typeof( HashPrime ).stringof );
+	alias T = typeof( HashBasis );
+
 	auto outputVal = HashBasis; // basis
 	foreach( component; inputVal )
 	{
@@ -67,11 +76,11 @@ auto fnv1a( T, T HashBasis, T HashPrime )( string inputVal ) pure nothrow @safe
 //----------------------------------------------------------------------------
 
 // Alias some pre-made values to standard function calls
-alias fnv1!( uint, FNV1Basis32, FNV1Prime32 ) fnv1_32;
-alias fnv1!( ulong, FNV1Basis64, FNV1Prime64 ) fnv1_64;
+pragma( inline ) auto fnv1_32( A )( A inputVal ) pure nothrow @safe { return fnv1!( FNV1Basis32, FNV1Prime32 )( inputVal ); }
+pragma( inline ) auto fnv1_64( A )( A inputVal ) pure nothrow @safe { return fnv1!( FNV1Basis64, FNV1Prime64 )( inputVal ); }
 
-alias fnv1a!( uint, FNV1Basis32, FNV1Prime32 ) fnv1a_32;
-alias fnv1a!( ulong, FNV1Basis64, FNV1Prime64 ) fnv1a_64;
+pragma( inline ) auto fnv1a_32( A )( A inputVal ) pure nothrow @safe { return fnv1a!( FNV1Basis32, FNV1Prime32 )( inputVal ); }
+pragma( inline ) auto fnv1a_64( A )( A inputVal ) pure nothrow @safe { return fnv1a!( FNV1Basis64, FNV1Prime64 )( inputVal ); }
 //----------------------------------------------------------------------------
 
 // Template wrapper just because
@@ -219,6 +228,7 @@ private immutable uint[ 256 ] crc32Table =
 	0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
 	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 ];
+//----------------------------------------------------------------------------
 
 auto crc32( uint DefaultBasis = uint.max )( const( ubyte )[] data, uint uBasis = DefaultBasis ) pure @safe nothrow
 {
@@ -244,17 +254,11 @@ auto rmdCrc32( string data, uint uBasis = 0 ) pure @safe nothrow
 	import std.string : toLower;
 
 	ubyte[] convertedData;
+	convertedData.length = data.length;
 
-	// FFFFFFFFFFFFFFFFFFFFFFFF
-	// Can't static if on __ctfe, so can't not call reserve at compile time
-/*	if( __ctfe )
+	foreach( iIndex, ref c; data )
 	{
-		convertedData.reserve( data.length );
-	}*/
-
-	foreach( ref c; data )
-	{
-		convertedData ~= cast( ubyte )toLower( c );
+		convertedData[ iIndex ] = cast( ubyte )toLower( c );
 	}
 
 	return rmdCrc32( convertedData, uBasis );
