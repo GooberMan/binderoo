@@ -130,7 +130,9 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 
 mixin template BindModules( int iCurrentVersion, Options... )
 {
-	mixin BindModuleStaticSetup!( );
+	import std.traits : isSomeFunction;
+
+	mixin BindModuleStaticSetup!( ExtractTupleOf!( isSomeFunction, Options ) );
 
 	void initialiseModuleBinding()
 	{
