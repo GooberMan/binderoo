@@ -44,7 +44,16 @@ public import binderoo.hash;
 public import binderoo.objectprivacy;
 public import binderoo.slice;
 
+public import binderoo.util.enumoptions;
+
 private import std.traits;
+//----------------------------------------------------------------------------
+
+enum BindOption
+{
+	ExportUntagged,
+	IgnoreBindNoExportObject,
+}
 //----------------------------------------------------------------------------
 
 mixin template BindVersionDeclaration( int iCurrentVersion )
@@ -56,17 +65,17 @@ mixin template BindVersionDeclaration( int iCurrentVersion )
 
 mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCalls... )
 {
-	mixin BindModuleImplementation!( iCurrentVersion, AdditionalStaticThisCalls );
+	mixin BindModuleStaticSetup!( AdditionalStaticThisCalls );
 
 	static void initialiseModuleBinding()
 	{
-		string thisModuleName = ModuleName!initialiseModuleBinding;
+		alias CurrModule = ModuleOf!theseModules;
 
-		auto currModule = generateModuleInfo();
-		auto theseFunctionsToImport = generateFunctionImports!( Type )();
-		auto theseFunctionsToExport = generateFunctionExports!( Type )();
-		auto theseObjectsToExport = generateObjectExports!( Type )();
-		auto theseEnumsToExport = generateEnumExports!( Type )();
+		auto currModule = generateModuleInfo!CurrModule();
+		auto theseFunctionsToImport = generateFunctionImports!( CurrModule, Type )();
+		auto theseFunctionsToExport = generateFunctionExports!( CurrModule, Type )();
+		auto theseObjectsToExport = generateObjectExports!( CurrModule, Type )();
+		auto theseEnumsToExport = generateEnumExports!( CurrModule, Type )();
 
 		registerModule( currModule );
 		registerImportFunctions( theseFunctionsToImport );
@@ -74,7 +83,7 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 		registerExportedObjects( theseObjectsToExport );
 		registerExportedEnums( theseEnumsToExport );
 
-		thisModule = currModule;
+		theseModules = [ currModule ];
 		functionsToImport = theseFunctionsToImport;
 		functionsToExport = theseFunctionsToExport;
 		objectsToExport = theseObjectsToExport;
@@ -87,18 +96,20 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 
 mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls... )
 {
-	mixin BindModuleImplementation!( iCurrentVersion, AdditionalStaticThisCalls );
+	mixin BindModuleStaticSetup!( AdditionalStaticThisCalls );
 
 	void initialiseModuleBinding()
 	{
-//		import std.stdio : writeln;
-//		writeln( "Initialising ", ThisModuleName, " bindings..." );
+		alias CurrModule = ModuleOf!theseModules;
 
-		auto currModule = generateModuleInfo();
-		auto theseFunctionsToImport = generateFunctionImports();
-		auto theseFunctionsToExport = generateFunctionExports();
-		auto theseObjectsToExport = generateObjectExports();
-		auto theseEnumsToExport = generateEnumExports();
+		//import std.stdio : writeln;
+		//pragma( msg, "Initialising " ~ CurrModule.stringof ~ " bindings..." );
+
+		auto currModule					= generateModuleInfo!CurrModule();
+		auto theseFunctionsToImport		= generateFunctionImports!CurrModule();
+		auto theseFunctionsToExport		= generateFunctionExports!CurrModule();
+		auto theseObjectsToExport		= generateObjectExports!CurrModule();
+		auto theseEnumsToExport			= generateEnumExports!CurrModule();
 
 		registerModule( currModule );
 		registerImportFunctions( theseFunctionsToImport );
@@ -106,7 +117,7 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 		registerExportedObjects( theseObjectsToExport );
 		registerExportedEnums( theseEnumsToExport );
 
-		thisModule = currModule;
+		theseModules = [ currModule ];
 		functionsToImport = theseFunctionsToImport;
 		functionsToExport = theseFunctionsToExport;
 		objectsToExport = theseObjectsToExport;
@@ -117,9 +128,59 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 }
 //----------------------------------------------------------------------------
 
+mixin template BindModules( int iCurrentVersion, Options... )
+{
+	mixin BindModuleStaticSetup!( );
+
+	void initialiseModuleBinding()
+	{
+		enum Modules = ExtractAllOf!( string, Options )();
+		enum BindOptions = OptionsOf!( BindOption, Options )();
+
+		BoundModule[] 		allModules;
+		BoundObject[]		allObjectsToExport;
+		BoundFunction[]		allFunctionsToImport;
+		BoundFunction[]		allFunctionsToExport;
+		BoundEnum[]			allEnumsToExport;
+
+		static foreach( ModuleName; Modules )
+		{
+			{
+				alias CurrModule = ModuleFromName!ModuleName;
+
+				auto currModule					= generateModuleInfo!CurrModule();
+				auto theseFunctionsToImport		= generateFunctionImports!CurrModule();
+				auto theseFunctionsToExport		= generateFunctionExports!CurrModule();
+				auto theseObjectsToExport		= generateObjectExports!CurrModule();
+				auto theseEnumsToExport			= generateEnumExports!CurrModule();
+
+				registerModule( currModule );
+				registerImportFunctions( theseFunctionsToImport );
+				registerExportedFunctions( theseFunctionsToExport );
+				registerExportedObjects( theseObjectsToExport );
+				registerExportedEnums( theseEnumsToExport );
+
+				allModules						~= currModule;
+				allObjectsToExport				~= theseObjectsToExport;
+				allFunctionsToImport			~= theseFunctionsToImport;
+				allFunctionsToExport			~= theseFunctionsToExport;
+				allEnumsToExport				~= theseEnumsToExport;
+			}
+		}
+
+		theseModules = allModules;
+		functionsToImport = allFunctionsToImport;
+		functionsToExport = allFunctionsToExport;
+		objectsToExport = allObjectsToExport;
+		enumsToExport = allEnumsToExport;
+	}
+}
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+
 // Module internals
 //----------------------------------------------------------------------------
-mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStaticThisCalls... )
+mixin template BindModuleStaticSetup( AdditionalStaticThisCalls... )
 {
 	shared static this()
 	{
@@ -134,647 +195,645 @@ mixin template BindModuleImplementation( int iCurrentVersion = 0, AdditionalStat
 
 	public:
 
-	__gshared BoundModule 							thisModule;
+	__gshared BoundModule[] 						theseModules;
 	__gshared BoundObject[]							objectsToExport;
 	__gshared BoundFunction[]						functionsToImport;
 	__gshared BoundFunction[]						functionsToExport;
 	__gshared BoundEnum[]							enumsToExport;
 	//------------------------------------------------------------------------
+}
+//----------------------------------------------------------------------------
 
-	template ModuleTypeDescriptors( ParentClass, Aliases... )
+template ModuleTypeDescriptors( alias ParentClass, Aliases... )
+{
+	import std.typetuple;
+	mixin( "import " ~ ModuleName!ParentClass ~ ";" );
+
+	string makeATuple()
 	{
-		import std.typetuple;
+		import std.conv : to;
+		import binderoo.traits : IsAggregateType, IsSomeType, joinWith;
 
-		string makeATuple()
+		string[] indices;
+		foreach( Alias; Aliases )
 		{
-			import std.conv : to;
-			import binderoo.traits : IsUserType, IsSomeType, joinWith;
+			enum AliasString = FullTypeName!( ParentClass ) ~ "." ~ Alias;
 
-			string[] indices;
-			foreach( Alias; Aliases )
+			static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
 			{
-				static if( !is( ParentClass == void ) )
-				{
-					enum AliasString = FullTypeName!( ParentClass ) ~ "." ~ Alias;
-				}
-				else
-				{
-					enum AliasString = Alias;
-				}
+				mixin( "alias Type = " ~ AliasString ~ ";" );
+				mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 
-				static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
+				static if( IsAggregateType!( Type ) && Alias == Type.stringof )
 				{
-					mixin( "alias Type = " ~ AliasString ~ ";" );
-					mixin( "import " ~ ModuleName!( Type ) ~ ";" );
-
-					static if( IsUserTypeButNotEnum!( Type ) && Alias == Type.stringof )
-					{
-						indices ~= AliasString;
-					}
+					indices ~= AliasString;
 				}
 			}
-
-			return "alias ModuleTypeDescriptors = TypeTuple!( " ~ indices.joinWith( ", " ) ~ " );";
 		}
 
-		mixin( makeATuple() );
+		return "alias ModuleTypeDescriptors = TypeTuple!( " ~ indices.joinWith( ", " ) ~ " );";
 	}
-	//------------------------------------------------------------------------
 
-	template ModuleEnumDescriptors( ParentClass, Aliases... )
+
+	mixin( makeATuple() );
+}
+//----------------------------------------------------------------------------
+
+template ModuleEnumDescriptors( alias ParentClass, Aliases... )
+{
+	import std.typetuple;
+	mixin( "import " ~ ModuleName!ParentClass ~ ";" );
+
+	string makeATuple()
 	{
-		import std.typetuple;
+		import std.conv : to;
+		import binderoo.traits : IsAggregateType, IsSomeType, joinWith;
 
-		string makeATuple()
+		string[] indices;
+		foreach( Alias; Aliases )
 		{
-			import std.conv : to;
-			import binderoo.traits : IsUserType, IsSomeType, joinWith;
+			enum AliasString = FullTypeName!( ParentClass ) ~ "." ~ Alias;
 
-			string[] indices;
-			foreach( Alias; Aliases )
+			static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
 			{
-				static if( !is( ParentClass == void ) )
-				{
-					enum AliasString = FullTypeName!( ParentClass ) ~ "." ~ Alias;
-				}
-				else
-				{
-					enum AliasString = Alias;
-				}
+				mixin( "alias Type = " ~ AliasString ~ ";" );
+				mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 
-				static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
+				static if( IsEnum!( Type ) && IsIntegral!( OriginalType!Type ) && Alias == Type.stringof )
 				{
-					mixin( "alias Type = " ~ AliasString ~ ";" );
-					mixin( "import " ~ ModuleName!( Type ) ~ ";" );
-
-					static if( IsEnum!( Type ) && IsIntegral!( OriginalType!Type ) && Alias == Type.stringof )
-					{
-						indices ~= AliasString;
-					}
+					indices ~= AliasString;
 				}
 			}
-
-			return "alias ModuleEnumDescriptors = TypeTuple!( " ~ indices.joinWith( ", " ) ~ " );";
 		}
 
-		mixin( makeATuple() );
+		return "alias ModuleEnumDescriptors = TypeTuple!( " ~ indices.joinWith( ", " ) ~ " );";
 	}
-	//------------------------------------------------------------------------
 
-	BoundModule generateModuleInfo( ObjectTypes... )()
+	mixin( makeATuple() );
+}
+//----------------------------------------------------------------------------
+
+BoundModule generateModuleInfo( alias Module, ObjectTypes... )()
+{
+	mixin( "import " ~ ModuleName!Module ~ ";" );
+
+	DString[] gatherFor( Types... )()
 	{
-		DString[] gatherFor( Types... )()
-		{
-			DString[] interfaceStrings;
+		DString[] interfaceStrings;
 
-			static foreach( CurrType; Types )
+		static foreach( CurrType; Types )
+		{
+			static if( __traits( hasMember, CurrType, "DInferfaceText" ) )
 			{
-				static if( __traits( hasMember, CurrType, "DInferfaceText" ) )
-				{
-					interfaceStrings ~= DString( CurrType.DInferfaceText );
-				}
+				interfaceStrings ~= DString( CurrType.DInferfaceText );
 			}
-
-			return interfaceStrings;
 		}
 
-		string thisModuleName = ModuleName!functionsToImport;
-
-		BoundModule currModule = { thisModuleName, cast(DString[])( [ ] ), thisModuleName.fnv1a_64() };
-
-		static if( ObjectTypes.length == 0 )
-		{
-			alias ModuleTypes = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
-		}
-		else
-		{
-			alias ModuleTypes = ModuleTypeDescriptors!( void, ObjectTypes[ 0 ].stringof );
-		}
-
-		currModule.strDInterfaceDecls = Slice!DString( gatherFor!ModuleTypes );
-
-		return currModule;
+		return interfaceStrings;
 	}
-	//------------------------------------------------------------------------
 
-	BoundObject[] generateObjectExports( ObjectTypes... )()
+	string thisModuleName = ModuleName!Module;
+
+	BoundModule currModule = { thisModuleName, cast(DString[])( [ ] ), thisModuleName.fnv1a_64() };
+
+	static if( ObjectTypes.length == 0 )
 	{
-		BoundObject[] gatherFor( bool bRecursive, Types... )()
-		{
-			BoundObject[] objects;
-			foreach( Type; Types )
-			{
-				static if ( Type.stringof == "Monitor" || Type.stringof == "Object" )
-				{
-					//pragma( msg, "Not grabbing object " ~ Type.stringof );
-				}
-				else
-				{
-					//pragma( msg, "Grabbing object " ~ Type.stringof );
-					/+static if( is( Type == class ) )
-					{
-						foreach( m; __traits( allMembers, Type ) )
-						{
-							pragma( msg, m );
-						}
-					}+/
-					static if( ( is( Type == struct ) || is( Type == class ) )
-								&& !HasUDA!( Type, BindNoExportObject ) )
-					{
-						alias TheseFunctions = BoundObjectFunctions!( Type );
-						objects ~= BoundObject( DString( FullTypeName!( Type ) ),
-												fnv1a_64( FullTypeName!( Type ) ),
-												&TheseFunctions.allocObj,
-												&TheseFunctions.deallocObj,
-												&TheseFunctions.thunkObj,
-												&TheseFunctions.serialiseObj,
-												&TheseFunctions.deserialiseObj,
-												TheseFunctions.TypeVal,
-												&TheseFunctions.generateCSharpVariables,
-												&TheseFunctions.generateCSharpTypeDecl );
-					}
-
-					static if( bRecursive )
-					{
-						alias AllSubTypes = ModuleTypeDescriptors!( Type, __traits( allMembers, Type ) );
-
-						objects ~= gatherFor!( bRecursive, AllSubTypes )();
-					}
-				}
-			}
-
-			return objects;
-		}
-
-		static if( ObjectTypes.length == 0 )
-		{
-			alias ModuleTypes = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
-			return gatherFor!( true, ModuleTypes )();
-		}
-		else
-		{
-			alias ModuleTypes = ModuleTypeDescriptors!( void, ObjectTypes[ 0 ].stringof );
-			return gatherFor!( false, ModuleTypes )();
-		}
+		alias ModuleTypes = ModuleTypeDescriptors!( Module, __traits( allMembers, Module ) );
 	}
-	//------------------------------------------------------------------------
-
-	BoundEnum[] generateEnumExports( ExportTypes... )()
+	else
 	{
-		BoundEnum[] gatherFor( Types... )()
-		{
-			BoundEnum[] enums;
-
-			foreach( Type; Types )
-			{
-				import std.traits : OriginalType;
-				import std.conv : to;
-
-				alias ThisTypeString = TypeString!( OriginalType!Type );
-
-				//pragma( msg, "Enum " ~ FullTypeName!Type );
-				//pragma( msg, " -> D type: " ~ ThisTypeString.DDecl );
-				//pragma( msg, " -> C type: " ~ ThisTypeString.CDecl );
-				//pragma( msg, " -> C# type: " ~ ThisTypeString.CSharpDecl );
-
-				BoundEnum newEnum;
-				newEnum.strName = DString( FullTypeName!Type );
-				newEnum.strUnderlyingTypeD = DString( ThisTypeString.DDecl );
-				newEnum.strUnderlyingTypeC = DString( ThisTypeString.CDecl );
-				newEnum.strUnderlyingTypeCSharp = DString( ThisTypeString.CSharpDecl );
-
-				EnumValueInfo[] values;
-
-				foreach( EnumValue; __traits( allMembers, Type ) )
-				{
-					mixin( "enum Val = cast( OriginalType!Type )" ~ FullTypeName!Type ~ "." ~ EnumValue ~ ";" );
-					//pragma( msg, " -> " ~ EnumValue ~ " = " ~ Val.to!string );
-
-					EnumValueInfo newInfo;
-					newInfo.strIdentifier = DString( EnumValue );
-					newInfo.strValue = DString( Val.to!string );
-
-					values ~= newInfo;
-				}
-
-				newEnum.vecAllValues = Slice!EnumValueInfo( values );
-
-				enums ~= newEnum;
-			}
-
-			return enums;
-		}
-
-		static if( ExportTypes.length == 0 )
-		{
-			alias ModuleEnums = ModuleEnumDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
-		}
-		else
-		{
-			alias ModuleEnums = ModuleEnumDescriptors!( void, ExportTypes[ 0 ].stringof );
-		}
-
-		return gatherFor!ModuleEnums;
+		alias ModuleTypes = ModuleTypeDescriptors!( Module, ObjectTypes[ 0 ].stringof );
 	}
-	//------------------------------------------------------------------------
 
-	BoundFunction[] generateFunctionImports( ImportTypes... )()
+	currModule.strDInterfaceDecls = Slice!DString( gatherFor!ModuleTypes );
+
+	return currModule;
+}
+//----------------------------------------------------------------------------
+
+BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
+{
+	mixin( "import " ~ ModuleName!Parent ~ ";" );
+
+	BoundObject[] gatherFor( bool bRecursive, Types... )()
 	{
-		BoundFunction.FunctionKind convert( BindRawImport.FunctionKind eKind )
+		BoundObject[] objects;
+		foreach( Type; Types )
 		{
-			final switch( eKind ) with( BindRawImport.FunctionKind )
+			static if ( Type.stringof == "Monitor" || Type.stringof == "Object" )
 			{
-			case Invalid:
-				return BoundFunction.FunctionKind.Undefined;
-			case Static:
-				return BoundFunction.FunctionKind.Static;
-			case Method:
-				return BoundFunction.FunctionKind.Method;
-			case Virtual:
-				return BoundFunction.FunctionKind.Virtual;
-			case Constructor:
-				return BoundFunction.FunctionKind.Constructor;
-			case Destructor:
-				return BoundFunction.FunctionKind.Destructor;
-			case VirtualDestructor:
-				return BoundFunction.FunctionKind.VirtualDestructor;
+				//pragma( msg, "Not grabbing object " ~ Type.stringof );
 			}
-		}
-
-		BoundFunction[] TableGrabber( Type, string TableStaticMember )()
-		{
-			BoundFunction[] imports;
-
-			static if( IsStaticMember!( Type, TableStaticMember ) )
+			else
 			{
-				alias TableType = typeof( __traits( getMember, Type, TableStaticMember ) );
-
-				static if( Type.StructType == InheritanceStructType.CPP )
+				//pragma( msg, "Grabbing object " ~ Type.stringof );
+				/+static if( is( Type == class ) )
 				{
-					alias CTypeData = GetUDA!( Type, CTypeName );
-				}
-				else
-				{
-					alias CTypeData = GetUDA!( typeof( Type.base ), CTypeName );
-				}
-
-				foreach( iIndex, TableMember; TableType.init.tupleof )
-				{
-					static if( HasUDA!( TableType.tupleof[ iIndex ], BindRawImport ) )
+					foreach( m; __traits( allMembers, Type ) )
 					{
-						enum MemberName = __traits( identifier, TableType.tupleof[ iIndex ] );
-						alias ImportData = GetUDA!( TableType.tupleof[ iIndex ], BindRawImport );
-
-						enum AbstractFlag = ImportData.bOwnerIsAbstract ? BoundFunction.Flags.OwnerIsAbstract : BoundFunction.Flags.None;
-						enum ConstFlag = ImportData.bIsConst ? BoundFunction.Flags.Const : BoundFunction.Flags.None;
-
-						enum FoundFlags = cast( BoundFunction.Flags )( AbstractFlag | ConstFlag );
-
-						//pragma( msg, cast(string)ImportData.strCName ~ ", " ~ cast(string)ImportData.strCSignature );
-
-/*						enum NameHash = ImportData.uNameHash;
-						enum SignatureHash = ImportData.uSignatureHash;
-						pragma( msg, tableMember ~ " imports " ~ ImportData.strCName ~ " ( " ~ NameHash.stringof ~ " ), " ~ ImportData.strCSignature ~ " ( " ~ SignatureHash.stringof ~ " )" );*/
-
-						imports ~= BoundFunction(	DString( ImportData.strCName )
-													, DString( ImportData.strCSignature )
-													, DString( CTypeData.name )
-													, DString( CTypeData.header )
-													, ImportData.strIncludeVersions.toSliceRecursive
-													, ImportData.strExcludeVersions.toSliceRecursive
-													, BoundFunction.Hashes( ImportData.uNameHash, ImportData.uSignatureHash )
-													, mixin( "cast(void*) &" ~ FullTypeName!( Type ) ~ "." ~ TableStaticMember ~ "." ~ MemberName )
-													, ImportData.iIntroducedVersion
-													, ImportData.iOrderInTable
-													, BoundFunction.Resolution.WaitingForImport
-													, BoundFunction.CallingConvention.CPP
-													, convert( ImportData.eKind )
-													, FoundFlags
-													, null
-													, null
-													, null
-													, null
-													, null
-													, null
-													, null
-													, null
-													, null
-													, null
-												);
+						pragma( msg, m );
 					}
+				}+/
+				static if( ( is( Type == struct ) || is( Type == class ) )
+							&& !HasUDA!( Type, BindNoExportObject ) )
+				{
+					alias TheseFunctions = BoundObjectFunctions!( Type );
+					objects ~= BoundObject( DString( FullTypeName!( Type ) ),
+											fnv1a_64( FullTypeName!( Type ) ),
+											&TheseFunctions.allocObj,
+											&TheseFunctions.deallocObj,
+											&TheseFunctions.thunkObj,
+											&TheseFunctions.serialiseObj,
+											&TheseFunctions.deserialiseObj,
+											TheseFunctions.TypeVal,
+											&TheseFunctions.generateCSharpVariables,
+											&TheseFunctions.generateCSharpTypeDecl );
 				}
-			}
-
-			return imports;
-		}
-
-		BoundFunction[] gatherFor( bool bRecursive, Types... )()
-		{
-			BoundFunction[] imports;
-			foreach( Type; Types )
-			{
-				alias Members = TypeTuple!( __traits( allMembers, Type ) );
-
-				imports ~= TableGrabber!( Type, "_vtableData" )();
-				imports ~= TableGrabber!( Type, "_methodtableData" )();
 
 				static if( bRecursive )
 				{
-					imports ~= gatherFor!( bRecursive, ModuleTypeDescriptors!( Type, Members ) )();
+					alias AllSubTypes = ModuleTypeDescriptors!( Type, __traits( allMembers, Type ) );
+
+					objects ~= gatherFor!( bRecursive, AllSubTypes )();
 				}
 			}
-
-			return imports;
 		}
 
-		static if( ImportTypes.length == 0 )
-		{
-			alias Types = ModuleTypeDescriptors!( void, __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
-			return gatherFor!( true, Types )();
-		}
-		else
-		{
-			alias Types = ModuleTypeDescriptors!( void, ImportTypes[ 0 ].stringof );
-			return gatherFor!( false, Types )();
-		}
+		return objects;
 	}
 
-	BoundFunction[] generateFunctionExports( ExportTypes... )()
+	static if( ObjectTypes.length == 0 )
 	{
+		alias ModuleTypes = ModuleTypeDescriptors!( Parent, __traits( allMembers, Parent ) );
+		return gatherFor!( true, ModuleTypes )();
+	}
+	else
+	{
+		alias ModuleTypes = ModuleTypeDescriptors!( __traits( parent, ObjectTypes[ 0 ] ), ObjectTypes[ 0 ].stringof );
+		return gatherFor!( false, ModuleTypes )();
+	}
+}
+//----------------------------------------------------------------------------
 
-		BoundFunction[] functionGrabber( int IntroducedVersion, alias Scope, Symbols... )()
+BoundEnum[] generateEnumExports( alias Parent, ExportTypes... )()
+{
+	mixin( "import " ~ ModuleName!Parent ~ ";" );
+
+	BoundEnum[] gatherFor( Types... )()
+	{
+		BoundEnum[] enums;
+
+		foreach( Type; Types )
 		{
-			//pragma( msg, "Processing " ~ Scope.stringof ~ " for exports" );
-			enum ExportAllFound = IntroducedVersion != BindExport.iIntroducedVersion.init;
-			enum ScopeIsAggregate = IsAggregateType!Scope;
+			import std.traits : OriginalType;
+			import std.conv : to;
 
-			BoundFunction[] foundExports;
+			alias ThisTypeString = TypeString!( OriginalType!Type );
 
-			void handleFunction( alias Descriptor )( int iIntroducedVersion )
+			//pragma( msg, "Enum " ~ FullTypeName!Type );
+			//pragma( msg, " -> D type: " ~ ThisTypeString.DDecl );
+			//pragma( msg, " -> C type: " ~ ThisTypeString.CDecl );
+			//pragma( msg, " -> C# type: " ~ ThisTypeString.CSharpDecl );
+
+			BoundEnum newEnum;
+			newEnum.strName = DString( FullTypeName!Type );
+			newEnum.strUnderlyingTypeD = DString( ThisTypeString.DDecl );
+			newEnum.strUnderlyingTypeC = DString( ThisTypeString.CDecl );
+			newEnum.strUnderlyingTypeCSharp = DString( ThisTypeString.CSharpDecl );
+
+			EnumValueInfo[] values;
+
+			foreach( EnumValue; __traits( allMembers, Type ) )
 			{
-				//static assert( Descriptor.IsCPlusPlusFunction, FullTypeName!( CurrFuncSymbol ) ~ " can only be exported as extern( C++ ) for now." );
-				static if( Descriptor.IsImplementedInType )
-				{
-					void* pFunctionCDecl;
-					void* pFunctionCPPDecl;
+				mixin( "enum Val = cast( OriginalType!Type )" ~ FullTypeName!Type ~ "." ~ EnumValue ~ ";" );
+				//pragma( msg, " -> " ~ EnumValue ~ " = " ~ Val.to!string );
 
-					alias NewFunc = CPPFunctionGenerator!Descriptor;
+				EnumValueInfo newInfo;
+				newInfo.strIdentifier = DString( EnumValue );
+				newInfo.strValue = DString( Val.to!string );
 
-					static if( Descriptor.IsCPlusPlusFunction )
-					{
-						pFunctionCDecl = &NewFunc.FuncCDecl;
-						mixin( "pFunctionCPPDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
-					}
-					else static if( Descriptor.IsCFunction )
-					{
-						mixin( "pFunctionCDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
-						pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
-					}
-					else
-					{
-						//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
-						pFunctionCDecl = &NewFunc.FuncCDecl;
-						pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
-					}
-
-					enum FullName		= Descriptor.FullyQualifiedName;
-					enum Signature		= FunctionString!( Descriptor ).CSignature;
-					enum DDecl			= FunctionString!( Descriptor ).DDecl;
-					enum CDecl			= FunctionString!( Descriptor ).CDecl;
-					enum CSharpDecl		= FunctionString!( Descriptor ).CSharpDecl;
-					enum ParameterNames	= FunctionString!( Descriptor ).ParameterNames;
-
-					static if( Descriptor.IsStatic )
-					{
-						enum FunctionKind = BoundFunction.FunctionKind.Static;
-					}
-					else
-					{
-						static if( Descriptor.IsProperty )
-						{
-							enum FunctionKind = BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property;
-						}
-						else
-						{
-							enum FunctionKind = BoundFunction.FunctionKind.Method;
-						}
-					}
-
-					//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
-					//pragma( msg, " -> Parameter names: " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
-					//pragma( msg, " -> C Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CPrototype() );
-					//pragma( msg, " -> Parameter types (C): " ~ BoundFunctionFunctions!( Descriptor ).CParameterTypes().joinWith( ", " ) );
-					//pragma( msg, " -> D Declaration: " ~ BoundFunctionFunctions!( Descriptor ).DPrototype() );
-					//pragma( msg, " -> Parameter types (D): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
-					//pragma( msg, " -> C# Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpPrototype() );
-					//pragma( msg, " -> Parameter types (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes().joinWith( ", " ) );
-					//pragma( msg, " -> Parameter call (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers().joinWith( ", " ) );
-
-					foundExports ~= BoundFunction( DString( FullName )
-													, DString( Signature )
-													, DString( "" )
-													, DString( "" )
-													, Slice!DString.init
-													, Slice!DString.init
-													, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
-													, pFunctionCDecl
-													, pFunctionCPPDecl
-													, iIntroducedVersion
-													, 0
-													, BoundFunction.Resolution.Exported
-													, BoundFunction.CallingConvention.CPP
-													, FunctionKind
-													, BoundFunction.Flags.None
-													, &BoundFunctionFunctions!( Descriptor ).CPrototype
-													, &BoundFunctionFunctions!( Descriptor ).DPrototype
-													, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
-													, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype
-													, &BoundFunctionFunctions!( Descriptor ).ParameterNames
-													, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
-													, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
-													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
-													, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledParameterTypes
-													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
-												);
-				}
+				values ~= newInfo;
 			}
 
-			void handleVariable( Type, size_t TupleIndex )()
-			{
-				alias VariableDesc = VariableDescriptor!( Type.tupleof[ TupleIndex ] );
-				alias GeneratedFuncs = CPPFunctionGenerator!VariableDesc;
-				alias GetterDesc = FunctionDescriptor!( GeneratedFuncs.GetterCPPDecl );
-				alias SetterDesc = FunctionDescriptor!( GeneratedFuncs.SetterCPPDecl );
+			newEnum.vecAllValues = Slice!EnumValueInfo( values );
 
-				enum FullNameGetter = VariableDesc.FullyQualifiedName ~ "_Getter";
-				enum SignatureGetter	= FunctionString!( GetterDesc ).CSignature;
-
-				enum FullNameSetter = VariableDesc.FullyQualifiedName ~ "_Setter";
-				enum SignatureSetter	= FunctionString!( SetterDesc ).CSignature;
-
-				enum FunctionKind = cast(BoundFunction.FunctionKind)( BoundFunction.FunctionKind.CodeGenerated | BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property );
-
-				foundExports ~= BoundFunction( DString( FullNameGetter )
-												, DString( SignatureGetter )
-												, DString( "" )
-												, DString( "" )
-												, Slice!DString.init
-												, Slice!DString.init
-												, BoundFunction.Hashes( fnv1a_64( FullNameGetter ), fnv1a_64( SignatureGetter ) )
-												, &GeneratedFuncs.GetterCDecl
-												, &GeneratedFuncs.GetterCPPDecl
-												, 1 // HORRIBLE HACK
-												, 0
-												, BoundFunction.Resolution.Exported
-												, BoundFunction.CallingConvention.CPP
-												, FunctionKind
-												, BoundFunction.Flags.None
-												, &BoundFunctionFunctions!( GetterDesc ).CPrototype
-												, &BoundFunctionFunctions!( GetterDesc ).DPrototype
-												, &BoundFunctionFunctions!( GetterDesc ).CSharpPrototype
-												, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledPrototype
-												, &BoundFunctionFunctions!( GetterDesc ).ParameterNames
-												, &BoundFunctionFunctions!( GetterDesc ).CParameterTypes
-												, &BoundFunctionFunctions!( GetterDesc ).DParameterTypes
-												, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterTypes
-												, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledParameterTypes
-												, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterNamesWithQualifiers
-											);
-
-				foundExports ~= BoundFunction( DString( FullNameSetter )
-												, DString( SignatureSetter )
-												, DString( "" )
-												, DString( "" )
-												, Slice!DString.init
-												, Slice!DString.init
-												, BoundFunction.Hashes( fnv1a_64( FullNameSetter ), fnv1a_64( SignatureSetter ) )
-												, &GeneratedFuncs.SetterCDecl
-												, &GeneratedFuncs.SetterCPPDecl
-												, 1 // HORRIBLE HACK
-												, 0
-												, BoundFunction.Resolution.Exported
-												, BoundFunction.CallingConvention.CPP
-												, FunctionKind
-												, BoundFunction.Flags.None
-												, &BoundFunctionFunctions!( SetterDesc ).CPrototype
-												, &BoundFunctionFunctions!( SetterDesc ).DPrototype
-												, &BoundFunctionFunctions!( SetterDesc ).CSharpPrototype
-												, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledPrototype
-												, &BoundFunctionFunctions!( SetterDesc ).ParameterNames
-												, &BoundFunctionFunctions!( SetterDesc ).CParameterTypes
-												, &BoundFunctionFunctions!( SetterDesc ).DParameterTypes
-												, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterTypes
-												, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledParameterTypes
-												, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterNamesWithQualifiers
-											);
-			}
-
-			void handleVariables( Type )()
-			{
-				static foreach( iIndex; 0 .. Type.tupleof.length )
-				{
-					static if( VariableDescriptor!( Type.tupleof[ iIndex ] ).PrivacyLevel == PrivacyLevel.Public )
-					{
-						handleVariable!( Type, iIndex );
-					}
-				}
-			}
-
-			foreach( SymbolName; Symbols )
-			{
-				mixin( "enum CompilesGetOverloads = __traits( compiles, __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ) );" );
-				mixin( "enum CompilesIsAggregate = __traits( compiles, IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " ) );" );
-
-				static if( CompilesGetOverloads )
-				{
-					mixin( "enum NumOverloads = __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ).length;" );
-				}
-				else
-				{
-					enum NumOverloads = 0;
-				}
-
-				static if( CompilesIsAggregate )
-				{
-					mixin( "enum IsAggregate = IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " );" );
-				}
-				else
-				{
-					enum IsAggregate = false;
-				}
-
-				static if( SymbolName == "Monitor"
-							|| SymbolName == "Object" )
-				{
-					//pragma( msg, "Skipping " ~ Scope.stringof ~ "." ~ SymbolName ~ "..." );
-				}
-				else
-				{
-					static if( NumOverloads > 0 )
-					{
-						static if( ExportAllFound )
-						{
-							enum ExportData = BindExport( IntroducedVersion, -1 );
-						}
-						else
-						{
-							alias ExportData = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
-						}
-
-						static if( !is( ExportData : void ) )
-						{
-							static foreach( iIndex, CurrFuncSymbol; __traits( getOverloads, Scope, SymbolName ) )
-							{
-								static if( !ScopeIsAggregate )
-								{
-									handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
-								}
-								else
-								{
-									handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
-								}
-							}
-						}
-					}
-					else static if( IsAggregate )
-					{
-						mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
-
-						static if( ExportAllFound )
-						{
-							enum UDA = BindExport( IntroducedVersion, -1 );
-						}
-						else
-						{
-							alias UDA = GetUDA!( Symbol, BindExport );
-						}
-
-						static if( !is( UDA : void ) )
-						{
-							enum NewIntroducedVersion = UDA.iIntroducedVersion;
-							foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
-							static if( is( Symbol == class ) )
-							{
-								handleVariables!( Symbol )();
-							}
-						}
-					}
-				}
-			}
-
-			return foundExports;
+			enums ~= newEnum;
 		}
 
-		static if( ExportTypes.length == 0 )
+		return enums;
+	}
+
+	static if( ExportTypes.length == 0 )
+	{
+		alias ModuleEnums = ModuleEnumDescriptors!( Parent, __traits( allMembers, Parent ) );
+	}
+	else
+	{
+		alias ModuleEnums = ModuleEnumDescriptors!( Parent, ExportTypes[ 0 ].stringof );
+	}
+
+	return gatherFor!ModuleEnums;
+}
+//----------------------------------------------------------------------------
+
+BoundFunction[] generateFunctionImports( alias Parent, ImportTypes... )()
+{
+	mixin( "import " ~ ModuleName!Parent ~ ";" );
+
+	BoundFunction.FunctionKind convert( BindRawImport.FunctionKind eKind )
+	{
+		final switch( eKind ) with( BindRawImport.FunctionKind )
 		{
-			return functionGrabber!( BindExport.iIntroducedVersion.init, mixin( ModuleName!( functionsToImport ) ), __traits( allMembers, mixin( ModuleName!( functionsToImport ) ) ) );
-		}
-		else
-		{
-			return functionGrabber!( BindExport.iIntroducedVersion.init, mixin( ModuleName!( functionsToImport ) ), ExportTypes[ 0 ].stringof );
+		case Invalid:
+			return BoundFunction.FunctionKind.Undefined;
+		case Static:
+			return BoundFunction.FunctionKind.Static;
+		case Method:
+			return BoundFunction.FunctionKind.Method;
+		case Virtual:
+			return BoundFunction.FunctionKind.Virtual;
+		case Constructor:
+			return BoundFunction.FunctionKind.Constructor;
+		case Destructor:
+			return BoundFunction.FunctionKind.Destructor;
+		case VirtualDestructor:
+			return BoundFunction.FunctionKind.VirtualDestructor;
 		}
 	}
 
+	BoundFunction[] TableGrabber( Type, string TableStaticMember )()
+	{
+		BoundFunction[] imports;
+
+		static if( IsStaticMember!( Type, TableStaticMember ) )
+		{
+			alias TableType = typeof( __traits( getMember, Type, TableStaticMember ) );
+
+			static if( Type.StructType == InheritanceStructType.CPP )
+			{
+				alias CTypeData = GetUDA!( Type, CTypeName );
+			}
+			else
+			{
+				alias CTypeData = GetUDA!( typeof( Type.base ), CTypeName );
+			}
+
+			foreach( iIndex, TableMember; TableType.init.tupleof )
+			{
+				static if( HasUDA!( TableType.tupleof[ iIndex ], BindRawImport ) )
+				{
+					enum MemberName = __traits( identifier, TableType.tupleof[ iIndex ] );
+					alias ImportData = GetUDA!( TableType.tupleof[ iIndex ], BindRawImport );
+
+					enum AbstractFlag = ImportData.bOwnerIsAbstract ? BoundFunction.Flags.OwnerIsAbstract : BoundFunction.Flags.None;
+					enum ConstFlag = ImportData.bIsConst ? BoundFunction.Flags.Const : BoundFunction.Flags.None;
+
+					enum FoundFlags = cast( BoundFunction.Flags )( AbstractFlag | ConstFlag );
+
+					//pragma( msg, cast(string)ImportData.strCName ~ ", " ~ cast(string)ImportData.strCSignature );
+
+/*						enum NameHash = ImportData.uNameHash;
+					enum SignatureHash = ImportData.uSignatureHash;
+					pragma( msg, tableMember ~ " imports " ~ ImportData.strCName ~ " ( " ~ NameHash.stringof ~ " ), " ~ ImportData.strCSignature ~ " ( " ~ SignatureHash.stringof ~ " )" );*/
+
+					imports ~= BoundFunction(	DString( ImportData.strCName )
+												, DString( ImportData.strCSignature )
+												, DString( CTypeData.name )
+												, DString( CTypeData.header )
+												, ImportData.strIncludeVersions.toSliceRecursive
+												, ImportData.strExcludeVersions.toSliceRecursive
+												, BoundFunction.Hashes( ImportData.uNameHash, ImportData.uSignatureHash )
+												, mixin( "cast(void*) &" ~ FullTypeName!( Type ) ~ "." ~ TableStaticMember ~ "." ~ MemberName )
+												, ImportData.iIntroducedVersion
+												, ImportData.iOrderInTable
+												, BoundFunction.Resolution.WaitingForImport
+												, BoundFunction.CallingConvention.CPP
+												, convert( ImportData.eKind )
+												, FoundFlags
+												, null
+												, null
+												, null
+												, null
+												, null
+												, null
+												, null
+												, null
+												, null
+												, null
+											);
+				}
+			}
+		}
+
+		return imports;
+	}
+
+	BoundFunction[] gatherFor( bool bRecursive, Types... )()
+	{
+		BoundFunction[] imports;
+		foreach( Type; Types )
+		{
+			alias Members = TypeTuple!( __traits( allMembers, Type ) );
+
+			imports ~= TableGrabber!( Type, "_vtableData" )();
+			imports ~= TableGrabber!( Type, "_methodtableData" )();
+
+			static if( bRecursive )
+			{
+				imports ~= gatherFor!( bRecursive, ModuleTypeDescriptors!( Type, Members ) )();
+			}
+		}
+
+		return imports;
+	}
+
+	static if( ImportTypes.length == 0 )
+	{
+		alias Types = ModuleTypeDescriptors!( Parent , __traits( allMembers, Parent ) );
+		return gatherFor!( true, Types )();
+	}
+	else
+	{
+		alias Types = ModuleTypeDescriptors!( __traits( parent, ImportTypes[ 0 ] ), ImportTypes[ 0 ].stringof );
+		return gatherFor!( false, Types )();
+	}
+}
+	
+BoundFunction[] generateFunctionExports( alias Parent, ExportTypes... )()
+{
+	mixin( "import " ~ ModuleName!Parent ~ ";" );
+
+	BoundFunction[] functionGrabber( int IntroducedVersion, alias Scope, Symbols... )()
+	{
+		//pragma( msg, "Processing " ~ Scope.stringof ~ " for exports" );
+		enum ExportAllFound = IntroducedVersion != BindExport.iIntroducedVersion.init;
+		enum ScopeIsAggregate = IsAggregateType!Scope;
+
+		BoundFunction[] foundExports;
+
+		void handleFunction( alias Descriptor )( int iIntroducedVersion )
+		{
+			//static assert( Descriptor.IsCPlusPlusFunction, FullTypeName!( CurrFuncSymbol ) ~ " can only be exported as extern( C++ ) for now." );
+			static if( Descriptor.IsImplementedInType )
+			{
+				void* pFunctionCDecl;
+				void* pFunctionCPPDecl;
+
+				alias NewFunc = CPPFunctionGenerator!Descriptor;
+
+				static if( Descriptor.IsCPlusPlusFunction )
+				{
+					pFunctionCDecl = &NewFunc.FuncCDecl;
+					mixin( "pFunctionCPPDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+				}
+				else static if( Descriptor.IsCFunction )
+				{
+					mixin( "pFunctionCDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+					pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
+				}
+				else
+				{
+					//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
+					pFunctionCDecl = &NewFunc.FuncCDecl;
+					pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
+				}
+
+				enum FullName		= Descriptor.FullyQualifiedName;
+				enum Signature		= FunctionString!( Descriptor ).CSignature;
+				enum DDecl			= FunctionString!( Descriptor ).DDecl;
+				enum CDecl			= FunctionString!( Descriptor ).CDecl;
+				enum CSharpDecl		= FunctionString!( Descriptor ).CSharpDecl;
+				enum ParameterNames	= FunctionString!( Descriptor ).ParameterNames;
+
+				static if( Descriptor.IsStatic )
+				{
+					enum FunctionKind = BoundFunction.FunctionKind.Static;
+				}
+				else
+				{
+					static if( Descriptor.IsProperty )
+					{
+						enum FunctionKind = BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property;
+					}
+					else
+					{
+						enum FunctionKind = BoundFunction.FunctionKind.Method;
+					}
+				}
+
+				//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
+				//pragma( msg, " -> Parameter names: " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
+				//pragma( msg, " -> C Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CPrototype() );
+				//pragma( msg, " -> Parameter types (C): " ~ BoundFunctionFunctions!( Descriptor ).CParameterTypes().joinWith( ", " ) );
+				//pragma( msg, " -> D Declaration: " ~ BoundFunctionFunctions!( Descriptor ).DPrototype() );
+				//pragma( msg, " -> Parameter types (D): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
+				//pragma( msg, " -> C# Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpPrototype() );
+				//pragma( msg, " -> Parameter types (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes().joinWith( ", " ) );
+				//pragma( msg, " -> Parameter call (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers().joinWith( ", " ) );
+
+				foundExports ~= BoundFunction( DString( FullName )
+												, DString( Signature )
+												, DString( "" )
+												, DString( "" )
+												, Slice!DString.init
+												, Slice!DString.init
+												, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
+												, pFunctionCDecl
+												, pFunctionCPPDecl
+												, iIntroducedVersion
+												, 0
+												, BoundFunction.Resolution.Exported
+												, BoundFunction.CallingConvention.CPP
+												, FunctionKind
+												, BoundFunction.Flags.None
+												, &BoundFunctionFunctions!( Descriptor ).CPrototype
+												, &BoundFunctionFunctions!( Descriptor ).DPrototype
+												, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
+												, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype
+												, &BoundFunctionFunctions!( Descriptor ).ParameterNames
+												, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
+												, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
+												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
+												, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledParameterTypes
+												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
+											);
+			}
+		}
+
+		void handleVariable( Type, size_t TupleIndex )()
+		{
+			alias VariableDesc = VariableDescriptor!( Type.tupleof[ TupleIndex ] );
+			alias GeneratedFuncs = CPPFunctionGenerator!VariableDesc;
+			alias GetterDesc = FunctionDescriptor!( GeneratedFuncs.GetterCPPDecl );
+			alias SetterDesc = FunctionDescriptor!( GeneratedFuncs.SetterCPPDecl );
+
+			enum FullNameGetter = VariableDesc.FullyQualifiedName ~ "_Getter";
+			enum SignatureGetter	= FunctionString!( GetterDesc ).CSignature;
+
+			enum FullNameSetter = VariableDesc.FullyQualifiedName ~ "_Setter";
+			enum SignatureSetter	= FunctionString!( SetterDesc ).CSignature;
+
+			enum FunctionKind = cast(BoundFunction.FunctionKind)( BoundFunction.FunctionKind.CodeGenerated | BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property );
+
+			foundExports ~= BoundFunction( DString( FullNameGetter )
+											, DString( SignatureGetter )
+											, DString( "" )
+											, DString( "" )
+											, Slice!DString.init
+											, Slice!DString.init
+											, BoundFunction.Hashes( fnv1a_64( FullNameGetter ), fnv1a_64( SignatureGetter ) )
+											, &GeneratedFuncs.GetterCDecl
+											, &GeneratedFuncs.GetterCPPDecl
+											, 1 // HORRIBLE HACK
+											, 0
+											, BoundFunction.Resolution.Exported
+											, BoundFunction.CallingConvention.CPP
+											, FunctionKind
+											, BoundFunction.Flags.None
+											, &BoundFunctionFunctions!( GetterDesc ).CPrototype
+											, &BoundFunctionFunctions!( GetterDesc ).DPrototype
+											, &BoundFunctionFunctions!( GetterDesc ).CSharpPrototype
+											, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledPrototype
+											, &BoundFunctionFunctions!( GetterDesc ).ParameterNames
+											, &BoundFunctionFunctions!( GetterDesc ).CParameterTypes
+											, &BoundFunctionFunctions!( GetterDesc ).DParameterTypes
+											, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterTypes
+											, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledParameterTypes
+											, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterNamesWithQualifiers
+										);
+
+			foundExports ~= BoundFunction( DString( FullNameSetter )
+											, DString( SignatureSetter )
+											, DString( "" )
+											, DString( "" )
+											, Slice!DString.init
+											, Slice!DString.init
+											, BoundFunction.Hashes( fnv1a_64( FullNameSetter ), fnv1a_64( SignatureSetter ) )
+											, &GeneratedFuncs.SetterCDecl
+											, &GeneratedFuncs.SetterCPPDecl
+											, 1 // HORRIBLE HACK
+											, 0
+											, BoundFunction.Resolution.Exported
+											, BoundFunction.CallingConvention.CPP
+											, FunctionKind
+											, BoundFunction.Flags.None
+											, &BoundFunctionFunctions!( SetterDesc ).CPrototype
+											, &BoundFunctionFunctions!( SetterDesc ).DPrototype
+											, &BoundFunctionFunctions!( SetterDesc ).CSharpPrototype
+											, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledPrototype
+											, &BoundFunctionFunctions!( SetterDesc ).ParameterNames
+											, &BoundFunctionFunctions!( SetterDesc ).CParameterTypes
+											, &BoundFunctionFunctions!( SetterDesc ).DParameterTypes
+											, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterTypes
+											, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledParameterTypes
+											, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterNamesWithQualifiers
+										);
+		}
+
+		void handleVariables( Type )()
+		{
+			static foreach( iIndex; 0 .. Type.tupleof.length )
+			{
+				static if( VariableDescriptor!( Type.tupleof[ iIndex ] ).PrivacyLevel == PrivacyLevel.Public )
+				{
+					handleVariable!( Type, iIndex );
+				}
+			}
+		}
+
+		foreach( SymbolName; Symbols )
+		{
+			mixin( "enum CompilesGetOverloads = __traits( compiles, __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ) );" );
+			mixin( "enum CompilesIsAggregate = __traits( compiles, IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " ) );" );
+
+			static if( CompilesGetOverloads )
+			{
+				mixin( "enum NumOverloads = __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ).length;" );
+			}
+			else
+			{
+				enum NumOverloads = 0;
+			}
+
+			static if( CompilesIsAggregate )
+			{
+				mixin( "enum IsAggregate = IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " );" );
+			}
+			else
+			{
+				enum IsAggregate = false;
+			}
+
+			static if( SymbolName == "Monitor"
+						|| SymbolName == "Object" )
+			{
+				//pragma( msg, "Skipping " ~ Scope.stringof ~ "." ~ SymbolName ~ "..." );
+			}
+			else
+			{
+				static if( NumOverloads > 0 )
+				{
+					static if( ExportAllFound )
+					{
+						enum ExportData = BindExport( IntroducedVersion, -1 );
+					}
+					else
+					{
+						alias ExportData = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
+					}
+
+					static if( !is( ExportData : void ) )
+					{
+						static foreach( iIndex, CurrFuncSymbol; __traits( getOverloads, Scope, SymbolName ) )
+						{
+							static if( !ScopeIsAggregate )
+							{
+								handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
+							}
+							else
+							{
+								handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
+							}
+						}
+					}
+				}
+				else static if( IsAggregate )
+				{
+					mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
+
+					static if( ExportAllFound )
+					{
+						enum UDA = BindExport( IntroducedVersion, -1 );
+					}
+					else
+					{
+						alias UDA = GetUDA!( Symbol, BindExport );
+					}
+
+					static if( !is( UDA : void ) )
+					{
+						enum NewIntroducedVersion = UDA.iIntroducedVersion;
+						foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
+						static if( is( Symbol == class ) )
+						{
+							handleVariables!( Symbol )();
+						}
+					}
+				}
+			}
+		}
+
+		return foundExports;
+	}
+
+	static if( ExportTypes.length == 0 )
+	{
+		return functionGrabber!( BindExport.iIntroducedVersion.init, Parent, __traits( allMembers, Parent ) );
+	}
+	else
+	{
+		return functionGrabber!( BindExport.iIntroducedVersion.init, Parent, ExportTypes[ 0 ].stringof );
+	}
 }
 //----------------------------------------------------------------------------
 
