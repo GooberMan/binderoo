@@ -582,10 +582,33 @@ template Alias( alias A )
 }
 //----------------------------------------------------------------------------
 
-/+template TypeTuple( T... ) if( T.length > 0 )
+template AliasSeq( A... ) if( A.length > 0 )
 {
-	alias TypeTuple = T;
-}+/
+	alias AliasSeq = A;
+}
+//----------------------------------------------------------------------------
+
+// TestTemplate must be instantiable, take one parameter, and alias to a boolean enum.
+template ExtractTupleOf( alias TestTemplate, Symbols... ) if( __traits( compiles, "TestTemplate!Symbols[ 0 ]" ) )
+{
+	string generate()
+	{
+		import std.conv : to;
+
+		string[] passedSymbols;
+		static foreach( iIndex, Symbol; Symbols )
+		{
+			static if( TestTemplate!Symbol )
+			{
+				passedSymbols ~= "Symbols[ " ~ iIndex.to!string ~ " ]";
+			}
+		}
+
+		return "alias ExtractTupleOf = binderoo.traits.AliasSeq!( " ~ passedSymbols.joinWith( ", " ) ~ " );";
+	}
+
+	mixin( generate() );
+}
 //----------------------------------------------------------------------------
 
 template ModuleOf( alias Symbol )
