@@ -33,6 +33,7 @@ module binderoo.binding.cppfunctiongenerator;
 public import binderoo.binding.attributes;
 public import binderoo.functiondescriptor;
 public import binderoo.variabledescriptor;
+public import binderoo.slice;
 
 // CPPFunctionGenerator!FunctionDescriptor has the following members:
 // * FuncCDecl - a C wrappper to the specified function
@@ -54,13 +55,36 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 
 	static if( IsBaseTemplate!( FunctionDescriptor, Desc ) )
 	{
-		mixin( "import " ~ Desc.ModuleName ~ ";" );
+		static string collectModules()
+		{
+			import std.algorithm : canFind;
+
+			string[] output = [ "import " ~ Desc.ModuleName ~ ";" ];
+
+			static if( Desc.IsMemberFunction )
+			{
+				output ~= gatherImports!( Desc.ObjectType );
+			}
+			static if( Desc.HasReturnType )
+			{
+				output ~= gatherImports!( Desc.UnqualifiedReturnType );
+			}
+
+			static foreach( Param; Desc.ParametersAsTuple )
+			{
+				output ~= gatherImports!( Param.UnqualifiedType );
+			}
+
+			return output.joinWith!( x => "static " ~ x )( "\n" );
+		}
+
 		enum FnName = Desc.FunctionName;
 
 		static string generate()
 		{
+			mixin( collectModules() );
 			// WHY DO I HAVE TO KEEP DOING THIS...
-			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nexport extern( %s ) static ";
+			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ).replace( "!", "_" ).replace( "(", "_" ).replace( ")", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nexport extern( %s ) static ";
 			enum ExportDeclC = MangleBase.format( "c", "C" );
 			enum ExportDeclCPP = MangleBase.format( "cpp", "C++" );
 
@@ -81,11 +105,11 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			{
 				static if( is( Desc.ObjectType == class ) )
 				{
-					strParameters ~= Desc.ObjectType.stringof ~ " pThis";
+					strParameters ~= TypeString!( Desc.ObjectType ).FullyQualifiedDDecl ~ " pThis";
 				}
 				else
 				{
-					strParameters ~= Desc.ObjectType.stringof ~ "* pThis";
+					strParameters ~= TypeString!( Desc.ObjectType ).FullyQualifiedDDecl ~ "* pThis";
 				}
 				strParameterNames ~= "pThis";
 			}
@@ -116,7 +140,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			}
 			else
 			{
-				appendToBoth( Desc.ReturnType.stringof );
+				appendToBoth( TypeString!( Desc.ReturnType ).FullyQualifiedDDecl );
 			}
 			static if( Desc.ReturnsRef )
 			{
@@ -134,7 +158,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 					appendToBoth( "ref " );
 				}
 
-				appendToBoth( Desc.ReturnType.stringof ~ " retval = " );
+				appendToBoth( FullTypeName!( Desc.ReturnType ) ~ " retval = " );
 			}
 
 			static if( Desc.IsMemberFunction )
@@ -174,17 +198,25 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			return strCOutput ~ "\n" ~ strCPPOutput ~ "\nalias FuncCDecl = " ~ FnName ~ "CDecl;\nalias FuncCPPDecl = " ~ FnName ~ "CPPDecl;";
 		}
 
-		enum Defn = generate();
+		enum Defn = collectModules() ~ "\n\n" ~ generate();
 		//pragma( msg, Defn );
 		mixin( Defn );
 	}
 	else static if( IsBaseTemplate!( VariableDescriptor, Desc ) )
 	{
-		mixin( "import " ~ Desc.ModuleName ~ ";" );
+		static string collectModules()
+		{
+			string[] strOutput;
+			strOutput ~= gatherImports!( Desc.ElementType.Type );
+			strOutput ~= gatherImports!( Desc.BaseType.Type );
+			return strOutput.joinWith!( x => "static " ~ x )( "\n" );
+		}
+
 		static string generate( string AccessorType )()
 		{
+			mixin( collectModules() );
 			// WHY DO I HAVE TO KEEP DOING THIS...
-			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ) ~ "_%s\" )\nexport extern( %s ) static ";
+			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ).replace( "!", "_" ).replace( "(", "_" ).replace( ")", "_" ) ~ "_%s\" )\nexport extern( %s ) static ";
 			enum ExportDeclC = MangleBase.format( "c", AccessorType, "C" );
 			enum ExportDeclCPP = MangleBase.format( "cpp", AccessorType, "C++" );
 
@@ -229,7 +261,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 				strCOutput = ExportDeclC;
 				strCPPOutput = ExportDeclCPP;
 				static if( Desc.ElementType.IsStruct ) strCPPOutput ~= "ref ";
-				appendToBoth( Desc.ElementType.FullyQualifiedName );
+				appendToBoth( fullyQualifiedName!( Desc.ElementType.Type ) );
 				static if( Desc.ElementType.IsStruct ) strCOutput ~= "*";
 			}
 
@@ -255,7 +287,8 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			return strCOutput ~ "\n" ~ strCPPOutput;
 		}
 		
-		enum Defn = generate!"Getter" ~ "\n" ~ generate!"Setter"
+		enum Defn = collectModules() ~ "\n\n"
+					~ generate!"Getter" ~ "\n" ~ generate!"Setter"
 					~ "\nalias GetterCDecl = " ~ Desc.Name ~ "_GetterCDecl;"
 					~ "\nalias SetterCDecl = " ~ Desc.Name ~ "_SetterCDecl;"
 					~ "\nalias GetterCPPDecl = " ~ Desc.Name ~ "_GetterCPPDecl;"
