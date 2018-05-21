@@ -63,17 +63,19 @@ mixin template BindVersionDeclaration( int iCurrentVersion )
 }
 //----------------------------------------------------------------------------
 
-mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCalls... )
+mixin template BindOnly( Type, int iCurrentVersion = 0, Options... )
 {
-	mixin BindModuleStaticSetup!( AdditionalStaticThisCalls );
-
+	import std.traits : isSomeFunction;
+	mixin BindModuleStaticSetup!( ExtractTupleOf!( isSomeFunction, Options ) );
+	
 	static void initialiseModuleBinding()
 	{
+		enum BindOptions = OptionsOf!( BindOption, Options )();
 		alias CurrModule = ModuleOf!theseModules;
 
 		auto currModule = generateModuleInfo!CurrModule();
 		auto theseFunctionsToImport = generateFunctionImports!( CurrModule, Type )();
-		auto theseFunctionsToExport = generateFunctionExports!( CurrModule, Type )();
+		auto theseFunctionsToExport = generateFunctionExports!( BindOptions, CurrModule, Type )();
 		auto theseObjectsToExport = generateObjectExports!( CurrModule, Type )();
 		auto theseEnumsToExport = generateEnumExports!( CurrModule, Type )();
 
@@ -94,12 +96,14 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, AdditionalStaticThisCall
 }
 //----------------------------------------------------------------------------
 
-mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls... )
+mixin template BindModule( int iCurrentVersion = 0, Options... )
 {
-	mixin BindModuleStaticSetup!( AdditionalStaticThisCalls );
+	import std.traits : isSomeFunction;
+	mixin BindModuleStaticSetup!( ExtractTupleOf!( isSomeFunction, Options ) );
 
 	void initialiseModuleBinding()
 	{
+		enum BindOptions = OptionsOf!( BindOption, Options )();
 		alias CurrModule = ModuleOf!theseModules;
 
 		//import std.stdio : writeln;
@@ -107,7 +111,7 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 
 		auto currModule					= generateModuleInfo!CurrModule();
 		auto theseFunctionsToImport		= generateFunctionImports!CurrModule();
-		auto theseFunctionsToExport		= generateFunctionExports!CurrModule();
+		auto theseFunctionsToExport		= generateFunctionExports!( BindOptions, CurrModule )();
 		auto theseObjectsToExport		= generateObjectExports!CurrModule();
 		auto theseEnumsToExport			= generateEnumExports!CurrModule();
 
@@ -131,7 +135,6 @@ mixin template BindModule( int iCurrentVersion = 0, AdditionalStaticThisCalls...
 mixin template BindModules( int iCurrentVersion, Options... )
 {
 	import std.traits : isSomeFunction;
-
 	mixin BindModuleStaticSetup!( ExtractTupleOf!( isSomeFunction, Options ) );
 
 	void initialiseModuleBinding()
@@ -152,7 +155,7 @@ mixin template BindModules( int iCurrentVersion, Options... )
 
 				auto currModule					= generateModuleInfo!CurrModule();
 				auto theseFunctionsToImport		= generateFunctionImports!CurrModule();
-				auto theseFunctionsToExport		= generateFunctionExports!CurrModule();
+				auto theseFunctionsToExport		= generateFunctionExports!( BindOptions, CurrModule )();
 				auto theseObjectsToExport		= generateObjectExports!CurrModule();
 				auto theseEnumsToExport			= generateEnumExports!CurrModule();
 
@@ -561,7 +564,7 @@ BoundFunction[] generateFunctionImports( alias Parent, ImportTypes... )()
 	}
 }
 	
-BoundFunction[] generateFunctionExports( alias Parent, ExportTypes... )()
+BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportTypes... )()
 {
 	mixin( "import " ~ ModuleName!Parent ~ ";" );
 
@@ -615,7 +618,7 @@ BoundFunction[] generateFunctionExports( alias Parent, ExportTypes... )()
 				{
 					static if( Descriptor.IsProperty )
 					{
-						enum FunctionKind = BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property;
+						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property );
 					}
 					else
 					{
@@ -809,7 +812,16 @@ BoundFunction[] generateFunctionExports( alias Parent, ExportTypes... )()
 					}
 					else
 					{
-						alias UDA = GetUDA!( Symbol, BindExport );
+						alias FoundUDA = GetUDA!( Symbol, BindExport );
+
+						static if( is( FoundUDA : void ) && Options.ExportUntagged )
+						{
+							enum UDA = BindExport( 1, -1 );
+						}
+						else
+						{
+							alias UDA = FoundUDA;
+						}
 					}
 
 					static if( !is( UDA : void ) )
