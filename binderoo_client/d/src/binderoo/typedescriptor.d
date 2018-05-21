@@ -80,6 +80,15 @@ struct TypeDescriptor( T, bool bIsRef = false )
 
 	alias			UnqualifiedType					= Unqualified!( T );
 
+	static if( binderoo.traits.IsUserType!( UnqualifiedType ) )
+	{
+		enum		ModuleName						= binderoo.traits.ModuleName!( UnqualifiedType )();
+	}
+	else
+	{
+		enum		ModuleName						= "";
+	}
+
 	enum			Size							= T.sizeof;
 
 	enum			IsScalarType					= std.traits.isScalarType!( T );
