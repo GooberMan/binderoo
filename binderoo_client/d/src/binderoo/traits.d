@@ -495,21 +495,9 @@ template IsTemplatedType( T )
 }
 //----------------------------------------------------------------------------
 
-template IsTemplatedType( alias T ) if( IsModule!T || IsPackage!T )
+template IsTemplatedType( T : U!( Params ), alias U, Params )
 {
-	enum IsTemplatedType = false;
-}
-//----------------------------------------------------------------------------
-
-template IsTemplatedType( alias T ) if( is( T == function ) )
-{
-	enum IsTemplatedType = false;
-}
-//----------------------------------------------------------------------------
-
-template IsTemplatedType( T : U[], U )
-{
-	enum IsTemplatedType = IsTemplatedType!( U );
+	enum IsTemplatedType = true;
 }
 //----------------------------------------------------------------------------
 
@@ -519,9 +507,15 @@ template IsTemplatedType( alias T : U!( Params ), alias U, Params... )
 }
 //----------------------------------------------------------------------------
 
-template IsTemplatedType( T : U!( Params ), alias U, Params )
+template IsTemplatedType( T : U[], U )
 {
-	enum IsTemplatedType = true;
+	enum IsTemplatedType = IsTemplatedType!( U );
+}
+//----------------------------------------------------------------------------
+
+template IsTemplatedType( alias T )
+{
+	enum IsTemplatedType = false;
 }
 //----------------------------------------------------------------------------
 
@@ -540,6 +534,18 @@ template TemplateOf( alias T : U!( Params ), alias U, Params... )
 template TemplateOf( T : U!( Params ), alias U, Params... )
 {
 	alias TemplateOf = U;
+}
+//----------------------------------------------------------------------------
+
+template TemplateParamsOf( alias T : U!( Params ), alias U, Params... )
+{
+	alias TemplateParamsOf = binderoo.traits.AliasSeq!( Params );
+}
+//----------------------------------------------------------------------------
+
+template TemplateParamsOf( T: U!( Params ), alias U, Params... )
+{
+	alias TemplateParamsOf = binderoo.traits.AliasSeq!( Params );
 }
 //----------------------------------------------------------------------------
 
@@ -582,7 +588,7 @@ template Alias( alias A )
 }
 //----------------------------------------------------------------------------
 
-template AliasSeq( A... ) if( A.length > 0 )
+template AliasSeq( A... )
 {
 	alias AliasSeq = A;
 }
@@ -640,7 +646,19 @@ string FullTypeName( Symbol )()
 	}
 	else static if( IsTemplatedType!Symbol )
 	{
-		return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) ) ~ "." ~ Symbol.stringof;
+		string[] strTemplatedTypes;
+		static foreach( Param; TemplateParamsOf!Symbol )
+		{
+			static if( is( Param ) )
+			{
+				strTemplatedTypes ~= FullTypeName!Param;
+			}
+			else
+			{
+				strTemplatedTypes ~= __traits( identifier, Param );
+			}
+		}
+		return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) ) ~ "." ~ __traits( identifier, TemplateOf!( Symbol ) ) ~ "!(" ~ strTemplatedTypes.joinWith( "," ) ~ ")";
 	}
 	else static if( __traits( compiles, __traits( parent, Symbol ) ) )
 	{
@@ -729,38 +747,63 @@ string ModuleLocalTypeName( alias Symbol )()
 }
 //----------------------------------------------------------------------------
 
+string ModuleName( T )() if( IsTemplatedType!T )
+{
+	return ModuleName!( TemplateOf!T );
+}
+//----------------------------------------------------------------------------
+
+string ModuleName( T : PT*, PT )() if( IsTemplatedType!PT )
+{
+	return ModuleName!( TemplateOf!PT );
+}
+//----------------------------------------------------------------------------
+
+string ModuleName( T : AT[], AT )() if( IsTemplatedType!AT )
+{
+	return ModuleName!( TemplateOf!AT );
+}
+//----------------------------------------------------------------------------
+
 string ModuleName( alias Symbol )()
 {
-	import std.algorithm.searching : startsWith;
-
-	static if( IsModule!Symbol || IsPackage!Symbol )
+	static if( is( Symbol : PT*, PT ) )
 	{
-		return FullTypeName!Symbol;
+		return ModuleName!PT;
 	}
-	else static if( __traits( compiles, __traits( parent, Symbol ) ) )
+	else
 	{
-		alias Parent = Alias!( __traits( parent, Symbol ) );
+		import std.algorithm.searching : startsWith;
 
-		static if( is( Symbol ) && IsTemplatedType!Symbol )
+		static if( IsModule!Symbol || IsPackage!Symbol )
 		{
-			static if( IsModule!( __traits( parent, TemplateOf!( Symbol ) ) )
-				|| IsPackage!( __traits( parent, TemplateOf!( Symbol ) ) ) )
+			return FullTypeName!Symbol;
+		}
+		else static if( __traits( compiles, __traits( parent, Symbol ) ) )
+		{
+			alias Parent = Alias!( __traits( parent, Symbol ) );
+
+			static if( is( Symbol ) && IsTemplatedType!Symbol )
 			{
-				return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) );
+				static if( IsModule!( __traits( parent, TemplateOf!( Symbol ) ) )
+					|| IsPackage!( __traits( parent, TemplateOf!( Symbol ) ) ) )
+				{
+					return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) );
+				}
+				else
+				{
+					return ModuleName!( __traits( parent, TemplateOf!( Symbol ) ) );
+				}
+				
+			}
+			else static if( IsModule!Parent || IsPackage!Parent )
+			{
+				return FullTypeName!( __traits( parent, Symbol ) );
 			}
 			else
 			{
-				return ModuleName!( __traits( parent, TemplateOf!( Symbol ) ) );
+				return ModuleName!( __traits( parent, Symbol ) );
 			}
-				
-		}
-		else static if( IsModule!Parent || IsPackage!Parent )
-		{
-			return FullTypeName!( __traits( parent, Symbol ) );
-		}
-		else
-		{
-			return ModuleName!( __traits( parent, Symbol ) );
 		}
 	}
 }
@@ -780,29 +823,31 @@ string[] gatherImports( T )()
 		}
 	}
 
-	static if( IsUserType!( T ) )
+	alias UT = Unqualified!T;
+
+	static if( IsUserType!UT )
 	{
 		import std.traits;
 		import binderoo.objectprivacy;
 
-		addModule( moduleName!( T ) );
+		addModule( ModuleName!UT );
 
-		static if( IsTemplatedType!( T ) )
+		static if( IsTemplatedType!UT )
 		{
-			foreach( Parameter; TemplateParametersOf!( T ) )
+			foreach( Parameter; TemplateParametersOf!UT )
 			{
 				static if ( is( Parameter ) )
 				{
-					modules ~= gatherImports!( T );
+					modules ~= gatherImports!Parameter;
 				}
 			}
 		}
 
-		foreach( member; __traits( allMembers, T ) )
+		foreach( member; __traits( allMembers, UT ) )
 		{
-			static if( IsAccessible!( T, member ) && IsMemberVariable!( __traits( getMember, T, member ) ) && IsUserType!( typeof( __traits( getMember, T, member ) ) ) )
+			static if( IsAccessible!( UT, member ) && IsMemberVariable!( __traits( getMember, UT, member ) ) && IsUserType!( typeof( __traits( getMember, UT, member ) ) ) )
 			{
-				addModule( moduleName!( typeof( __traits( getMember, T, member ) ) ) );
+				addModule( ModuleName!( typeof( __traits( getMember, UT, member ) ) ) );
 			}
 		}
 	}
