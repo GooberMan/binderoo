@@ -39,7 +39,7 @@ public import std.typetuple;
 //----------------------------------------------------------------------------
 
 // This wrapper is designed to be used with Type.tupleof iterators
-template VariableDescriptor( alias Variable )
+struct VariableDescriptor( alias Variable )
 {
 	template HasUDA( Attr )
 	{
