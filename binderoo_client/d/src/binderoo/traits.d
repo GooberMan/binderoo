@@ -638,6 +638,12 @@ template ModuleFromName( string strModuleName )
 }
 //----------------------------------------------------------------------------
 
+template AliasFromName( string strName )
+{
+	mixin( "alias AliasFromName = binderoo.traits.Alias!( " ~ strName ~ ");" );
+}
+//----------------------------------------------------------------------------
+
 template IsAlias( alias Parent, string SymbolName )
 {
 	static bool impl()
@@ -648,7 +654,10 @@ template IsAlias( alias Parent, string SymbolName )
 			mixin( "alias ThisSymbol = binderoo.traits.Alias!( " ~ FullTypeName!Parent ~ "." ~ SymbolName ~ " );" );
 			return SymbolName != ThisSymbol.stringof; //__traits( identifier, ThisSymbol );
 		}
-		return false;
+		else
+		{
+			return false;
+		}
 	}
 
 	enum IsAlias = impl();
