@@ -571,6 +571,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 	BoundFunction[] functionGrabber( int IntroducedVersion, alias Scope, Symbols... )()
 	{
 		//pragma( msg, "Processing " ~ Scope.stringof ~ " for exports" );
+
 		enum ExportAllFound = IntroducedVersion != BindExport.iIntroducedVersion.init;
 		enum ScopeIsAggregate = IsAggregateType!Scope;
 
@@ -679,6 +680,10 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 			enum SignatureSetter	= FunctionString!( SetterDesc ).CSignature;
 
 			enum FunctionKind = cast(BoundFunction.FunctionKind)( BoundFunction.FunctionKind.CodeGenerated | BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property );
+
+			//pragma( msg, "Exporting " ~ VariableDesc.FullyQualifiedName ~ " Properties: " );
+			//pragma( msg, " -> Getter: " ~ FullNameGetter ~ " => " ~ SignatureGetter );
+			//pragma( msg, " -> Setter: " ~ FullNameSetter ~ " => " ~ SignatureSetter );
 
 			foundExports ~= BoundFunction( DString( FullNameGetter )
 											, DString( SignatureGetter )
@@ -802,7 +807,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 						}
 					}
 				}
-				else static if( IsAggregate )
+				else static if( IsAggregate && !IsAlias!( Scope, SymbolName ) )
 				{
 					mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
 
