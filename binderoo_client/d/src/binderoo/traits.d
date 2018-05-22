@@ -638,6 +638,23 @@ template ModuleFromName( string strModuleName )
 }
 //----------------------------------------------------------------------------
 
+template IsAlias( alias Parent, string SymbolName )
+{
+	static bool impl()
+	{
+		mixin( "static import " ~ ModuleName!Parent ~ ";" );
+		static if( __traits( compiles, "alias ThisSymbol = binderoo.traits.Alias!( " ~ FullTypeName!Parent ~ "." ~ SymbolName ~ " );" ) )
+		{
+			mixin( "alias ThisSymbol = binderoo.traits.Alias!( " ~ FullTypeName!Parent ~ "." ~ SymbolName ~ " );" );
+			return SymbolName != ThisSymbol.stringof; //__traits( identifier, ThisSymbol );
+		}
+		return false;
+	}
+
+	enum IsAlias = impl();
+}
+//----------------------------------------------------------------------------
+
 string FullTypeName( Symbol )()
 {
 	static if( is( Symbol A == const A ) )
