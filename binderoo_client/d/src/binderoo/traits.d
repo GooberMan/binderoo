@@ -664,11 +664,19 @@ template IsAlias( alias Parent, string SymbolName )
 }
 //----------------------------------------------------------------------------
 
-string FullTypeName( Symbol )()
+private template SymbolToString( T )
+{
+	enum String = T.stringof;
+	enum TemplateOpen = "!(";
+	enum TemplateClose = ")";
+}
+//----------------------------------------------------------------------------
+
+string FullTypeName( Symbol, alias StringProvider = SymbolToString )()
 {
 	static if( is( Symbol A == const A ) )
 	{
-		return "const(" ~ FullTypeName!( A ) ~ ")";
+		return "const(" ~ FullTypeName!( A, StringProvider ) ~ ")";
 	}
 	else static if( IsTemplatedType!Symbol )
 	{
@@ -677,34 +685,34 @@ string FullTypeName( Symbol )()
 		{
 			static if( is( Param ) )
 			{
-				strTemplatedTypes ~= FullTypeName!Param;
+				strTemplatedTypes ~= FullTypeName!( Param, StringProvider );
 			}
 			else
 			{
 				strTemplatedTypes ~= __traits( identifier, Param );
 			}
 		}
-		return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ) ) ~ "." ~ __traits( identifier, TemplateOf!( Symbol ) ) ~ "!(" ~ strTemplatedTypes.joinWith( "," ) ~ ")";
+		return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ), StringProvider ) ~ "." ~ __traits( identifier, TemplateOf!( Symbol ) ) ~ StringProvider!Symbol.TemplateOpen ~ strTemplatedTypes.joinWith( "," ) ~ StringProvider!Symbol.TemplateClose;
 	}
 	else static if( __traits( compiles, __traits( parent, Symbol ) ) )
 	{
-		return FullTypeName!( __traits( parent, Symbol ) ) ~ "." ~ Symbol.stringof;
+		return FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ "." ~ StringProvider!Symbol.String;
 	}
 	else
 	{
-		return Symbol.stringof;
+		return StringProvider!Symbol.String;
 	}
 }
 //----------------------------------------------------------------------------
 
-string FullTypeName( alias Symbol )()
+string FullTypeName( alias Symbol, alias StringProvider = SymbolToString )()
 {
 	import std.algorithm.searching : startsWith;
 	import std.traits : isSomeFunction;
 
 	static if( isSomeFunction!Symbol )
 	{
-		enum SymbolString = __traits( identifier, Symbol );
+		enum SymbolString = FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ __traits( identifier, Symbol );
 	}
 	else static if( Symbol.stringof.startsWith( "module " ) )
 	{
@@ -716,12 +724,12 @@ string FullTypeName( alias Symbol )()
 	}
 	else
 	{
-		enum SymbolString = Symbol.stringof;
+		enum SymbolString = StringProvider!Symbol.String;
 	}
 
 	static if( __traits( compiles, __traits( parent, Symbol ) ) )
 	{
-		return FullTypeName!( __traits( parent, Symbol ) ) ~ "." ~ SymbolString;
+		return FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ "." ~ SymbolString;
 	}
 	else
 	{
