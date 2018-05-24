@@ -365,13 +365,21 @@ template CSharpTypeString( T, MarshallingStage stage = MarshallingStage.Unmarsha
 
 template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unmarshalled )
 {
+	template StagedWrapper( T )
+	{
+		enum String = CSharpTypeString!( T, stage );
+		enum TemplateOpen = "<";
+		enum TemplateClose = ">";
+	}
+
 	static if( IsPointer!T && IsUserType!( T ) )
 	{
 		enum CSharpFullTypeString = "ref " ~ CSharpFullTypeString!( binderoo.traits.PointerTarget!T, stage );
 	}
 	else
 	{
-		enum CSharpFullTypeString = FullTypeName!T[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!( T, stage );
+		import std.algorithm : reverse, countUntil;
+		enum CSharpFullTypeString = FullTypeName!( T, StagedWrapper ); //[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!( T, stage );
 	}
 	//pragma( msg, T.stringof ~ " -> " ~ FullTypeName!T ~ " --> " ~ CSharpFullTypeString );
 }
@@ -417,7 +425,7 @@ struct TypeString( T, bool bIsRef = false )
 	}
 	//------------------------------------------------------------------------
 
-	enum			FullyQualifiedDDecl				= typeStringD( fullyQualifiedName!( T ) );
+	enum			FullyQualifiedDDecl				= typeStringD( FullTypeName!( T ) );
 	enum			DDecl							= typeStringD( T.stringof );
 	enum			CDecl							= typeStringC( CTypeString!( T ) );
 	enum			UnqualifiedCDecl				= unqualC( typeStringC( CTypeString!( T ) ) );
