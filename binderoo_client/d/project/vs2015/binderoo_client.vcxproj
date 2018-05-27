@@ -82,7 +82,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <DCompile Include="..\..\src\binderoo\binding\attributes.d" />
-    <DCompile Include="..\..\src\binderoo\binding\binding.d" />
     <DCompile Include="..\..\src\binderoo\binding\boundenum.d" />
     <DCompile Include="..\..\src\binderoo\binding\boundfunction.d" />
     <DCompile Include="..\..\src\binderoo\binding\boundmodule.d" />
@@ -93,6 +92,7 @@
     <DCompile Include="..\..\src\binderoo\binding\functionstub.d" />
     <DCompile Include="..\..\src\binderoo\binding\inheritance.d" />
     <DCompile Include="..\..\src\binderoo\binding\mangler.d" />
+    <DCompile Include="..\..\src\binderoo\binding\package.d" />
     <DCompile Include="..\..\src\binderoo\binding\serialise.d" />
     <DCompile Include="..\..\src\binderoo\descriptorsearch.d" />
     <DCompile Include="..\..\src\binderoo\functiondescriptor.d" />

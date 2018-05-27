@@ -39,9 +39,6 @@
     <DCompile Include="..\..\src\binderoo\binding\attributes.d">
       <Filter>binderoo\binding</Filter>
     </DCompile>
-    <DCompile Include="..\..\src\binderoo\binding\binding.d">
-      <Filter>binderoo\binding</Filter>
-    </DCompile>
     <DCompile Include="..\..\src\binderoo\binding\boundenum.d">
       <Filter>binderoo\binding</Filter>
     </DCompile>
@@ -90,6 +87,9 @@
     <DCompile Include="..\..\src\binderoo_client.d" />
     <DCompile Include="..\..\src\binderoo\util\enumoptions.d">
       <Filter>binderoo\util</Filter>
+    </DCompile>
+    <DCompile Include="..\..\src\binderoo\binding\package.d">
+      <Filter>binderoo\binding</Filter>
     </DCompile>
   </ItemGroup>
 </Project>
