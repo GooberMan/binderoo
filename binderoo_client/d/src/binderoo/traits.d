@@ -460,25 +460,20 @@ template TemplateParametersOf( T )
 	}
 	else
 	{
-		private import std.typetuple;
-		alias TemplateParametersOf = TypeTuple!( );
+		alias TemplateParametersOf = binderoo.traits.AliasSeq!( );
 	}
 }
 //----------------------------------------------------------------------------
 
 template TemplateParametersOf( T : U!( Params ), alias U, Params... )
 {
-	private import std.typetuple;
-
-	alias TemplateParametersOf = TypeTuple!( Params );
+	alias TemplateParametersOf = binderoo.traits.AliasSeq!( Params );
 }
 //----------------------------------------------------------------------------
 
 template TemplateParametersOf( T : __vector( Type[ Length ] ), Type, size_t Length )
 {
-	private import std.typetuple;
-
-	alias TemplateParametersOf = TypeTuple!( Type[ Length ] );
+	alias TemplateParametersOf = binderoo.traits.AliasSeq!( Type[ Length ] );
 }
 //----------------------------------------------------------------------------
 
@@ -664,15 +659,27 @@ template IsAlias( alias Parent, string SymbolName )
 }
 //----------------------------------------------------------------------------
 
-private template SymbolToString( T )
+struct DSymbolToStringProvider
 {
-	enum String = T.stringof;
+	enum String( T ) = T.stringof;
+	enum String( alias T ) = T.stringof;
 	enum TemplateOpen = "!(";
 	enum TemplateClose = ")";
+	enum NamespaceSeparator = ".";
 }
 //----------------------------------------------------------------------------
 
-string FullTypeName( Symbol, alias StringProvider = SymbolToString )()
+struct CSymbolToStringProvider
+{
+	enum String( T ) = T.stringof;
+	enum String( alias T ) = T.stringof;
+	enum TemplateOpen = "<";
+	enum TemplateClose = ">";
+	enum NamespaceSeparator = "::";
+}
+//----------------------------------------------------------------------------
+
+string FullTypeName( Symbol, alias StringProvider = DSymbolToStringProvider )()
 {
 	static if( is( Symbol A == const A ) )
 	{
@@ -692,20 +699,20 @@ string FullTypeName( Symbol, alias StringProvider = SymbolToString )()
 				strTemplatedTypes ~= __traits( identifier, Param );
 			}
 		}
-		return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ), StringProvider ) ~ "." ~ __traits( identifier, TemplateOf!( Symbol ) ) ~ StringProvider!Symbol.TemplateOpen ~ strTemplatedTypes.joinWith( "," ) ~ StringProvider!Symbol.TemplateClose;
+		return FullTypeName!( __traits( parent, TemplateOf!( Symbol ) ), StringProvider ) ~ StringProvider.NamespaceSeparator ~ __traits( identifier, TemplateOf!( Symbol ) ) ~ StringProvider.TemplateOpen ~ strTemplatedTypes.joinWith( "," ) ~ StringProvider.TemplateClose;
 	}
 	else static if( __traits( compiles, __traits( parent, Symbol ) ) )
 	{
-		return FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ "." ~ StringProvider!Symbol.String;
+		return FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ StringProvider.NamespaceSeparator ~ StringProvider.String!Symbol;
 	}
 	else
 	{
-		return StringProvider!Symbol.String;
+		return StringProvider.String!Symbol;
 	}
 }
 //----------------------------------------------------------------------------
 
-string FullTypeName( alias Symbol, alias StringProvider = SymbolToString )()
+string FullTypeName( alias Symbol, alias StringProvider = DSymbolToStringProvider )()
 {
 	import std.algorithm.searching : startsWith;
 	import std.traits : isSomeFunction;
@@ -724,12 +731,12 @@ string FullTypeName( alias Symbol, alias StringProvider = SymbolToString )()
 	}
 	else
 	{
-		enum SymbolString = StringProvider!Symbol.String;
+		enum SymbolString = StringProvider.String!Symbol;
 	}
 
 	static if( __traits( compiles, __traits( parent, Symbol ) ) )
 	{
-		return FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ "." ~ SymbolString;
+		return FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ StringProvider.NamespaceSeparator ~ SymbolString;
 	}
 	else
 	{

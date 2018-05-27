@@ -365,12 +365,15 @@ template CSharpTypeString( T, MarshallingStage stage = MarshallingStage.Unmarsha
 
 template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unmarshalled )
 {
-	template StagedWrapper( T )
+	struct CSharpSymbolToStringProvider
 	{
-		enum String = CSharpTypeString!( T, stage );
+		enum String( T ) = CSharpTypeString!( T, stage );
+		enum String( alias T ) = CSharpTypeString!( T, stage );
 		enum TemplateOpen = "<";
 		enum TemplateClose = ">";
+		enum NamespaceSeparator = ".";
 	}
+	//------------------------------------------------------------------------
 
 	static if( IsPointer!T && IsUserType!( T ) )
 	{
@@ -379,7 +382,7 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 	else
 	{
 		import std.algorithm : reverse, countUntil;
-		enum CSharpFullTypeString = FullTypeName!( T, StagedWrapper ); //[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!( T, stage );
+		enum CSharpFullTypeString = FullTypeName!( T, CSharpSymbolToStringProvider ); //[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!( T, stage );
 	}
 	//pragma( msg, T.stringof ~ " -> " ~ FullTypeName!T ~ " --> " ~ CSharpFullTypeString );
 }
