@@ -684,6 +684,8 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 			//pragma( msg, "Exporting " ~ VariableDesc.FullyQualifiedName ~ " Properties: " );
 			//pragma( msg, " -> Getter: " ~ FullNameGetter ~ " => " ~ SignatureGetter );
 			//pragma( msg, " -> Setter: " ~ FullNameSetter ~ " => " ~ SignatureSetter );
+			//pragma( msg, " -> C# Getter Declaration: " ~ BoundFunctionFunctions!( GetterDesc ).CSharpPrototype() );
+			//pragma( msg, " -> C# Setter Declaration: " ~ BoundFunctionFunctions!( SetterDesc ).CSharpPrototype() );
 
 			foundExports ~= BoundFunction( DString( FullNameGetter )
 											, DString( SignatureGetter )
@@ -796,13 +798,16 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 					{
 						static foreach( iIndex, CurrFuncSymbol; __traits( getOverloads, Scope, SymbolName ) )
 						{
-							static if( !ScopeIsAggregate )
+							static if( IsExternallyAccessible!CurrFuncSymbol )
 							{
-								handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
-							}
-							else
-							{
-								handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
+								static if( !ScopeIsAggregate )
+								{
+									handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
+								}
+								else
+								{
+									handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
+								}
 							}
 						}
 					}
