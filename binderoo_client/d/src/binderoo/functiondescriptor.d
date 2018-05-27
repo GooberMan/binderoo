@@ -55,6 +55,8 @@ else { enum DefaultCollectionOrder = CollectionOrder.Normal; }
 
 struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 {
+	mixin( "import " ~ binderoo.traits.ModuleName!symbol ~ ";" );
+
 	template HasUDA( Attr )
 	{
 		static if( is( typeof( symbol ) == void ) )
@@ -81,7 +83,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 	}
 	//------------------------------------------------------------------------
 
-	alias			UDAs							= TypeTuple!( __traits( getAttributes, symbol ) );
+	alias			UDAs							= binderoo.traits.AliasSeq!( __traits( getAttributes, symbol ) );
 	//------------------------------------------------------------------------
 
 	enum FunctionAttribute : uint
@@ -230,6 +232,8 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 	enum					IsProtected				= PrivacyLevel == PrivacyLevel.Protected;
 	enum					IsExport				= PrivacyLevel == PrivacyLevel.Export;
 	enum					IsPackage				= PrivacyLevel == PrivacyLevel.Package;
+
+	enum					CanCallExternally		= IsExternallyAccessible!( symbol );
 	//------------------------------------------------------------------------
 
 	static ReturnDescriptor.Type invoke( Params... )( Params params )
@@ -243,6 +247,8 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 
 struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 {
+	mixin( "import " ~ binderoo.traits.ModuleName!T ~ ";" );
+
 	template HasUDA( Attr )
 	{
 		static if( is( typeof( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) == void ) )
@@ -269,7 +275,7 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 	}
 	//------------------------------------------------------------------------
 
-	alias			UDAs							= TypeTuple!( __traits( getAttributes, __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) );
+	alias			UDAs							= binderoo.traits.AliasSeq!( __traits( getAttributes, __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) );
 	//------------------------------------------------------------------------
 
 	enum FunctionAttribute : uint
@@ -426,6 +432,8 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 	enum					IsProtected				= PrivacyLevel == PrivacyLevel.Protected;
 	enum					IsExport				= PrivacyLevel == PrivacyLevel.Export;
 	enum					IsPackage				= PrivacyLevel == PrivacyLevel.Package;
+
+	enum					CanCallExternally		= IsExternallyAccessible!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
 	//------------------------------------------------------------------------
 
 	static ReturnDescriptor.Type invoke( Params... )( ref T obj, Params params )
