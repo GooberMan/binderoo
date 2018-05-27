@@ -27,7 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 //----------------------------------------------------------------------------
 
-module binderoo.binding.binding;
+module binderoo.binding;
 //----------------------------------------------------------------------------
 
 public import binderoo.binding.attributes;

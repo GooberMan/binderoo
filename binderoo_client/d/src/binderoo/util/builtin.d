@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 module binderoo.util.builtin;
 
-import binderoo.binding.binding;
+import binderoo.binding;
 import binderoo.binding.inheritance;
 import binderoo.traits;
 
