@@ -47,6 +47,10 @@ struct Slice( Type )
 
 	final Type[]			opCast( T : Type[] )()								{ return pData[ 0 .. uLength ]; }
 	final Type[]			toSlice()											{ return pData[ 0 .. uLength ]; }
+	static if( !IsConst!Type && !IsImmutable!Type )
+	{
+		final const( Type )[]	opCast( T : const( Type )[] )()					{ return pData[ 0 .. uLength ]; }
+	}
 
 	this( Type[] from )
 	{
