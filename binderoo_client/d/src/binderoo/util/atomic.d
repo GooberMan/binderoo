@@ -33,17 +33,26 @@ module binderoo.util.atomic;
 // Atomic is directly analagous to std::atomic in the C++ Standard Library and
 // adheres to the standard functionality defined with it.
 
-import core.atomic;
 import binderoo.traits;
 //----------------------------------------------------------------------------
 
 template AtomicStorageOf( T )
 {
-	static assert( T.sizeof <= 8, T.stringof ~ " cannot be used as an atomic variable. Please use basic types only" );
-
-	static if( T.sizeof < 4 )
+	static if( is( T U == enum ) )
 	{
-		static if( IsUnsigned!T )
+		alias IntegralType = IntegralTypeOf!U;
+	}
+	else
+	{
+		alias IntegralType = IntegralTypeOf!T;
+	}
+
+	static assert( !is( IntegralType == void ), T.stringof ~ " cannot be used as an atomic variable. Please use basic types only." );
+	static assert( IntegralType.sizeof <= 8, T.stringof ~ " cannot be used as an atomic variable. Please use basic types only." );
+
+	static if( IntegralType.sizeof < 4 )
+	{
+		static if( IsUnsigned!IntegralType )
 		{
 			alias AtomicStorageOf = uint;
 		}
@@ -54,52 +63,58 @@ template AtomicStorageOf( T )
 	}
 	else
 	{
-		alias AtomicStorageOf = T;
+		alias AtomicStorageOf = IntegralType;
 	}
 }
 //----------------------------------------------------------------------------
 
-struct Atomic( T ) if( IsIntegral!T )
+struct Atomic( T ) if( IsIntegral!( IntegralTypeOf!T ) )
 {
-	alias Storage = AtomicStorageOf!T;
+	import core.atomic;
 
-	Storage m_val;
+	this( T primer )
+	{
+		m_val = primer;
+	}
+	//------------------------------------------------------------------------
 
 	// C++ std::atomic API
 
-	pragma( inline ) Storage exchange( ref const( Storage ) val )				{ cas( &m_val, &m_val, val ); }
-	pragma( inline ) Storage load( ) const										{ return atomicLoad( m_val ); }
-	pragma( inline ) void store( ref const( Storage ) val )						{ atomicStore( m_val, val ); }
+	pragma( inline ) T exchange( const( T ) val )									{ T prev = load(); store( val ); return prev; }
+	pragma( inline ) T load( ) const												{ return cast( T )atomicLoad( m_val ); }
+	pragma( inline ) void store( const( T ) val )									{ atomicStore( m_val, cast( Storage )val ); }
+	//------------------------------------------------------------------------
+
+	pragma( inline ) bool compare_exchange_strong( const( T ) val )					{ return cas( &m_val, cast( Storage )load(), cast( Storage )val ); }
+	//------------------------------------------------------------------------
 
 	alias fetch_add = fetch!"+";
 	alias fetch_sub = fetch!"-";
 	alias fetch_and = fetch!"&";
 	alias fetch_or = fetch!"|";
 	alias fetch_xor = fetch!"^";
-	//--------------------------------------------------------------------
+	//------------------------------------------------------------------------
 
 	// Convenience accessors
-	pragma( inline ) Storage opCast( CastType : Storage )()						{ return load(); }
-	pragma( inline ) Storage opAssign( ref const( Storage ) val )				{ store( val ); return val; }
+	pragma( inline ) T opCast( CastType : T )()										{ return load(); }
+	pragma( inline ) T opAssign( const( T ) val )									{ store( val ); return val; }
+	//------------------------------------------------------------------------
 
-	static if( !is( T == Storage ) )
-	{
-		pragma( inline ) T opCast( CastType : T )()								{ return cast( T )load(); }
-		pragma( inline ) Storage opAssign( ref const( Storage ) val )			{ store( cast( T )val ); return val; }
-	}
-	//--------------------------------------------------------------------
+	pragma( inline ) T opOpAssign( string op )( const( T ) val ) if( op == "+" )	{ return fetch_add( val ) + val; }
+	pragma( inline ) T opOpAssign( string op )( const( T ) val ) if( op == "-" )	{ return fetch_sub( val ) - val; }
+	pragma( inline ) T opOpAssign( string op )( const( T ) val ) if( op == "&" )	{ return fetch_and( val ) & val; }
+	pragma( inline ) T opOpAssign( string op )( const( T ) val ) if( op == "|" )	{ return fetch_or( val ) | val; }
+	pragma( inline ) T opOpAssign( string op )( const( T ) val ) if( op == "^" )	{ return fetch_xor( val ) ^ val; }
+	//------------------------------------------------------------------------
 
-	pragma( inline ) Storage opOpAssign( string op )( ref const( Storage ) val ) if( op == "+" )	{ return fetch_add( val ) + val; }
-	pragma( inline ) Storage opOpAssign( string op )( ref const( Storage ) val ) if( op == "-" 	)	{ return fetch_sub( val ) - val; }
-	pragma( inline ) Storage opOpAssign( string op )( ref const( Storage ) val ) if( op == "&" )	{ return fetch_and( val ) & val; }
-	pragma( inline ) Storage opOpAssign( string op )( ref const( Storage ) val ) if( op == "|" )	{ return fetch_or( val ) | val; }
-	pragma( inline ) Storage opOpAssign( string op )( ref const( Storage ) val ) if( op == "^" )	{ return fetch_xor( val ) ^ val; }
-	//--------------------------------------------------------------------
+	pragma( inline ) T opUnary( string op )( ) if( op == "++" )						{ return fetch_add( 1 ) + 1; }
+	pragma( inline ) T opUnary( string op )( ) if( op == "--" )						{ return fetch_sub( 1 ) - 1; }
 
-	pragma( inline ) Storage opUnary( string op )( ) if( op == "++" )			{ return fetch_add( 1 ) + 1; }
-	pragma( inline ) Storage opUnary( string op )( ) if( op == "--" 	)			{ return fetch_sub( 1 ) - 1; }
+	pragma( inline ) T fetch( string op )( const( T ) val )							{ return cast( T )atomicOp!op( m_val, cast( Storage )val ); }
+	//------------------------------------------------------------------------
 
-	pragma( inline ) Storage fetch( string op )( ref const( Storage ) val )		{ return atomicOp!op( m_val, val ); }
+	alias Storage = AtomicStorageOf!T;
+	private shared Storage m_val;
 
 }
 //----------------------------------------------------------------------------
