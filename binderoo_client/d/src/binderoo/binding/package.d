@@ -141,6 +141,7 @@ mixin template BindModules( int iCurrentVersion, Options... )
 	{
 		enum Modules = ExtractAllOf!( string, Options )();
 		enum BindOptions = OptionsOf!( BindOption, Options )();
+		alias SpecificTypes = ExtractTupleOf!( IsSomeType, Options );
 
 		BoundModule[] 		allModules;
 		BoundObject[]		allObjectsToExport;
@@ -158,6 +159,31 @@ mixin template BindModules( int iCurrentVersion, Options... )
 				auto theseFunctionsToExport		= generateFunctionExports!( BindOptions, CurrModule )();
 				auto theseObjectsToExport		= generateObjectExports!CurrModule();
 				auto theseEnumsToExport			= generateEnumExports!CurrModule();
+
+				registerModule( currModule );
+				registerImportFunctions( theseFunctionsToImport );
+				registerExportedFunctions( theseFunctionsToExport );
+				registerExportedObjects( theseObjectsToExport );
+				registerExportedEnums( theseEnumsToExport );
+
+				allModules						~= currModule;
+				allObjectsToExport				~= theseObjectsToExport;
+				allFunctionsToImport			~= theseFunctionsToImport;
+				allFunctionsToExport			~= theseFunctionsToExport;
+				allEnumsToExport				~= theseEnumsToExport;
+			}
+		}
+
+		static foreach( Type; SpecificTypes )
+		{
+			{
+				alias CurrModule = ModuleOf!Type;
+
+				auto currModule					= generateModuleInfo!CurrModule();
+				auto theseFunctionsToImport		= generateFunctionImports!( CurrModule, Type )();
+				auto theseFunctionsToExport		= generateFunctionExports!( BindOptions, CurrModule, Type )();
+				auto theseObjectsToExport		= generateObjectExports!( CurrModule, Type )();
+				auto theseEnumsToExport			= generateEnumExports!( CurrModule, Type )();
 
 				registerModule( currModule );
 				registerImportFunctions( theseFunctionsToImport );
@@ -246,35 +272,72 @@ template ModuleTypeDescriptors( alias ParentClass, Aliases... )
 
 template ModuleEnumDescriptors( alias ParentClass, Aliases... )
 {
+	import std.conv : to;
 	import std.typetuple;
 	mixin( "import " ~ ModuleName!ParentClass ~ ";" );
 
-	string makeATuple()
+	string[] getEnums( alias Parent, Symbols... )()
 	{
-		import std.conv : to;
 		import binderoo.traits : IsAggregateType, IsSomeType, joinWith;
 
 		string[] indices;
-		foreach( Alias; Aliases )
+		foreach( Symbol; Symbols )
 		{
-			enum AliasString = FullTypeName!( ParentClass ) ~ "." ~ Alias;
+			enum AliasString = FullTypeName!( Parent ) ~ "." ~ Symbol;
 
 			static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
 			{
 				mixin( "alias Type = " ~ AliasString ~ ";" );
 				mixin( "import " ~ ModuleName!( Type ) ~ ";" );
-
-				static if( IsEnum!( Type ) && IsIntegral!( OriginalType!Type ) && Alias == Type.stringof )
+				static if( Symbol == Type.stringof )
 				{
-					indices ~= AliasString;
+					static if( IsEnum!( Type ) && IsIntegral!( OriginalType!Type ) )
+					{
+						indices ~= AliasString;
+					}
+					else static if( IsAggregateType!Type )
+					{
+						indices ~= getEnums!( Type, __traits( allMembers, Type ) )();
+					}
 				}
 			}
 		}
 
-		return "alias ModuleEnumDescriptors = TypeTuple!( " ~ indices.joinWith( ", " ) ~ " );";
+		return indices;
 	}
 
-	mixin( makeATuple() );
+	mixin( "alias ModuleEnumDescriptors = TypeTuple!( " ~ getEnums!( ParentClass, Aliases )().joinWith( ", " ) ~ " );" );
+}
+//----------------------------------------------------------------------------
+
+template ModuleTemplateInstances( alias Parent, Symbols... )
+{
+	mixin( "import " ~ ModuleName!Parent ~ ";" );
+	
+	string[] getTemplates()
+	{
+		import std.conv : to;
+		import binderoo.traits : IsAggregateType, IsSomeType, IsAlias, joinWith;
+
+		string[] output;
+
+		foreach( Symbol; Symbols )
+		{
+			enum AliasString = FullTypeName!Parent ~ "." ~ Symbol;
+			static if( mixin( "__traits( compiles, " ~ AliasString ~ " )" ) )
+			{
+				mixin( "alias Type = " ~ AliasString ~ ";" );
+				static if( IsTemplate!Type )
+				{
+					output ~= AliasString;
+				}
+			}
+		}
+
+		return output;
+	}
+
+	mixin( "alias ModuleEnumDescriptors = binderoo.traits.AliasSeq!( " ~ getTemplates().joinWith( ", " ) ~ " );" );
 }
 //----------------------------------------------------------------------------
 
@@ -343,16 +406,18 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 							&& !HasUDA!( Type, BindNoExportObject ) )
 				{
 					alias TheseFunctions = BoundObjectFunctions!( Type );
-					objects ~= BoundObject( DString( FullTypeName!( Type ) ),
-											fnv1a_64( FullTypeName!( Type ) ),
-											&TheseFunctions.allocObj,
-											&TheseFunctions.deallocObj,
-											&TheseFunctions.thunkObj,
-											&TheseFunctions.serialiseObj,
-											&TheseFunctions.deserialiseObj,
-											TheseFunctions.TypeVal,
-											&TheseFunctions.generateCSharpVariables,
-											&TheseFunctions.generateCSharpTypeDecl );
+					objects ~= BoundObject( DString( FullTypeName!( Type ) )
+											, fnv1a_64( FullTypeName!( Type ) )
+											, &TheseFunctions.allocObj
+											, &TheseFunctions.deallocObj
+											, &TheseFunctions.thunkObj
+											, &TheseFunctions.serialiseObj
+											, &TheseFunctions.deserialiseObj
+											, TheseFunctions.TypeVal
+											, &TheseFunctions.generateCSharpVariables
+											, &TheseFunctions.generateCSharpTypeDecl
+											, &TheseFunctions.hasBaseType
+											, &TheseFunctions.getBaseTypeNameCSharp );
 				}
 
 				static if( bRecursive )
@@ -370,11 +435,13 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 	static if( ObjectTypes.length == 0 )
 	{
 		alias ModuleTypes = ModuleTypeDescriptors!( Parent, __traits( allMembers, Parent ) );
+		alias ModuleTemplates = ModuleTemplateInstances!( Parent, __traits( allMembers, Parent ) );
 		return gatherFor!( true, ModuleTypes )();
 	}
 	else
 	{
 		alias ModuleTypes = ModuleTypeDescriptors!( __traits( parent, ObjectTypes[ 0 ] ), ObjectTypes[ 0 ].stringof );
+		alias ModuleTemplates = ModuleTemplateInstances!( Parent, __traits( allMembers, Parent ) );
 		return gatherFor!( false, ModuleTypes )();
 	}
 }
@@ -438,6 +505,48 @@ BoundEnum[] generateEnumExports( alias Parent, ExportTypes... )()
 	}
 
 	return gatherFor!ModuleEnums;
+}
+//----------------------------------------------------------------------------
+
+template BoundFunctionReturnTypeKind( T )
+{
+	BoundFunction.FunctionKind generate( CurrType )()
+	{
+		BoundFunction.FunctionKind eKind;
+
+		static if( is( CurrType : PT*, PT ) )
+		{
+			eKind |= BoundFunction.FunctionKind.ReturnsPointer | generate!PT;
+		}
+		else static if( is( CurrType : AT[], AT ) )
+		{
+			eKind |= BoundFunction.FunctionKind.ReturnsArray | generate!AT;
+		}
+		else static if( is( CurrType == class ) || is( CurrType == interface ) )
+		{
+			eKind |= BoundFunction.FunctionKind.ReturnsClass;
+		}
+		else static if( is( CurrType == struct ) )
+		{
+			eKind |= BoundFunction.FunctionKind.ReturnsStruct;
+		}
+		else static if( is( CurrType == union ) )
+		{
+			eKind |= BoundFunction.FunctionKind.ReturnsUnion;
+		}
+		else static if( is( CurrType == void ) )
+		{
+			eKind |= BoundFunction.FunctionKind.ReturnsVoid;
+		}
+		else
+		{
+			eKind |= BoundFunction.FunctionKind.ReturnsBasicType;
+		}
+
+		return eKind;
+	}
+
+	enum BoundFunctionReturnTypeKind = generate!T();
 }
 //----------------------------------------------------------------------------
 
@@ -621,6 +730,10 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 					{
 						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property );
 					}
+					else static if( Descriptor.IsConstructor )
+					{
+						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Constructor );
+					}
 					else
 					{
 						enum FunctionKind = BoundFunction.FunctionKind.Method;
@@ -634,6 +747,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 				//pragma( msg, " -> D Declaration: " ~ BoundFunctionFunctions!( Descriptor ).DPrototype() );
 				//pragma( msg, " -> Parameter types (D): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
 				//pragma( msg, " -> C# Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpPrototype() );
+				//pragma( msg, " -> C# Marshalled declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype() );
 				//pragma( msg, " -> Parameter types (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes().joinWith( ", " ) );
 				//pragma( msg, " -> Parameter call (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers().joinWith( ", " ) );
 
@@ -650,7 +764,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 												, 0
 												, BoundFunction.Resolution.Exported
 												, BoundFunction.CallingConvention.CPP
-												, FunctionKind
+												, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( Descriptor.ReturnType ) )
 												, BoundFunction.Flags.None
 												, &BoundFunctionFunctions!( Descriptor ).CPrototype
 												, &BoundFunctionFunctions!( Descriptor ).DPrototype
@@ -660,7 +774,9 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 												, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
 												, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
 												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
+												, &BoundFunctionFunctions!( Descriptor ).CSharpReturnType
 												, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledParameterTypes
+												, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledReturnType
 												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
 											);
 			}
@@ -700,7 +816,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 											, 0
 											, BoundFunction.Resolution.Exported
 											, BoundFunction.CallingConvention.CPP
-											, FunctionKind
+											, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( GetterDesc.ReturnType ) )
 											, BoundFunction.Flags.None
 											, &BoundFunctionFunctions!( GetterDesc ).CPrototype
 											, &BoundFunctionFunctions!( GetterDesc ).DPrototype
@@ -710,7 +826,9 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 											, &BoundFunctionFunctions!( GetterDesc ).CParameterTypes
 											, &BoundFunctionFunctions!( GetterDesc ).DParameterTypes
 											, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterTypes
+											, &BoundFunctionFunctions!( GetterDesc ).CSharpReturnType
 											, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledParameterTypes
+											, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledReturnType
 											, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterNamesWithQualifiers
 										);
 
@@ -727,7 +845,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 											, 0
 											, BoundFunction.Resolution.Exported
 											, BoundFunction.CallingConvention.CPP
-											, FunctionKind
+											, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( SetterDesc.ReturnType ) )
 											, BoundFunction.Flags.None
 											, &BoundFunctionFunctions!( SetterDesc ).CPrototype
 											, &BoundFunctionFunctions!( SetterDesc ).DPrototype
@@ -737,7 +855,9 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 											, &BoundFunctionFunctions!( SetterDesc ).CParameterTypes
 											, &BoundFunctionFunctions!( SetterDesc ).DParameterTypes
 											, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterTypes
+											, &BoundFunctionFunctions!( SetterDesc ).CSharpReturnType
 											, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledParameterTypes
+											, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledReturnType
 											, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterNamesWithQualifiers
 										);
 		}
@@ -787,11 +907,20 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 				{
 					static if( ExportAllFound )
 					{
-						enum ExportData = BindExport( IntroducedVersion, -1 );
+						enum UDA = BindExport( IntroducedVersion, -1 );
 					}
 					else
 					{
-						alias ExportData = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
+						alias UDA = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
+					}
+
+					static if( is( UDA : void ) && Options.ExportUntagged )
+					{
+						enum ExportData = BindExport( 1, -1 );
+					}
+					else
+					{
+						alias ExportData = UDA;
 					}
 
 					static if( !is( ExportData : void ) )
@@ -1151,6 +1280,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		Type						eType;
 		string 						strName;
 		string						strFullName;
+		string						strInheritsFrom;
 		string[]					strTypeDecl;
 		string[]					strVariables;
 		BoundFunction*[]			arrFunctions;
@@ -1221,10 +1351,9 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			strMarshalledPrototype = strMarshalledPrototype[ 7 .. $ ];
 		}
 
-		string[] strSplitApart = strMarshalledPrototype.split( ' ' );
-		string strReturnType = strSplitApart[ 0 ];
+		string strReturnType = func.CSharpMarshalledReturnType();
+		string[] strSplitApart = strMarshalledPrototype.split( '(' );
 
-		strSplitApart = strMarshalledPrototype.split( '(' );
 		string strParameters = "(";
 		if( bMemberFunc )
 		{
@@ -1276,8 +1405,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			strPrototype = strPrototype[ 7 .. $ ];
 		}
 
-		string[] strSplitApart = strPrototype.split( ' ' );
-		string strReturnType = strSplitApart[ 0 ];
+		string strReturnType = func.CSharpReturnType();
 
 		if( bMemberFunc )
 		{
@@ -1293,7 +1421,12 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 		lines ~= strObjTabs ~ "public " ~ func.CSharpPrototype();
 		lines ~= strObjTabs ~ "{";
-		if( strReturnType == "void" )
+		if( func.eFunctionKind & BoundFunction.FunctionKind.Property )
+		{
+			lines ~= strContentTabs ~ "// TODO: THIS IS A PROPERTY";
+		}
+
+		if( strReturnType == "void" || func.eFunctionKind & BoundFunction.FunctionKind.Constructor )
 		{
 			lines ~= strContentTabs ~ "binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
 		}
@@ -1301,14 +1434,24 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		{
 			lines ~= strContentTabs ~ "return new SliceString( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
 		}
+		else if( func.eFunctionKind & BoundFunction.FunctionKind.ReturnsClass )
+		{
+			lines ~= strContentTabs ~ "return new " ~ strReturnType ~ "( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) );";
+		}
 		else if( strReturnType.endsWith( "[]" ) )
 		{
-			lines ~= strContentTabs ~ "return new Slice< " ~ strReturnType[ 0 .. $ - 2 ] ~ "> ( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
+			lines ~= strContentTabs ~ "return new Slice< " ~ strReturnType[ 0 .. $ - 2 ] ~ " >( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
 		}
 		else
 		{
 			lines ~= strContentTabs ~ "return binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
 		}
+
+		if( func.eFunctionKind & BoundFunction.FunctionKind.Property )
+		{
+			lines ~= strContentTabs ~ "// TODO: THIS IS A PROPERTY";
+		}
+
 		lines ~= strObjTabs ~ "}";
 		lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
 		lines ~= Blank;
@@ -1324,27 +1467,51 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string[] lines;
 
 		lines ~= "#region InternalMagic";
-		lines ~= strObjTabs ~ "public " ~ obj.strName ~ "()";
-		lines ~= strObjTabs ~ "{";
-		lines ~= strObjTabs ~ "\tpObj = new ImportedClass( \"" ~ obj.strFullName ~ "\" );";
-		lines ~= strObjTabs ~ "}";
-		lines ~= strSeparator;
-		lines ~= Blank;
-		lines ~= strObjTabs ~ "~" ~ obj.strName ~ "()";
-		lines ~= strObjTabs ~ "{";
-		lines ~= strObjTabs ~ "\tDispose();";
-		lines ~= strObjTabs ~ "}";
-		lines ~= strSeparator;
-		lines ~= Blank;
-		lines ~= strObjTabs ~ "public void Dispose()";
-		lines ~= strObjTabs ~ "{";
-		lines ~= strObjTabs ~ "\tif( pObj != null )";
-		lines ~= strObjTabs ~ "\t{";
-		lines ~= strObjTabs ~ "\t\tpObj.Dispose();";
-		lines ~= strObjTabs ~ "\t\tpObj = null;";
-		lines ~= strObjTabs ~ "\t}";
-		lines ~= strObjTabs ~ "}";
-		lines ~= strSeparator;
+		if( obj.strInheritsFrom.length == 0 )
+		{
+			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "()";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "\tpObj = new ImportedClass( \"" ~ obj.strFullName ~ "\" );";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
+			lines ~= strObjTabs ~ "protected " ~ obj.strName ~ "( string strClass )";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "\tpObj = new ImportedClass( strClass );";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
+			lines ~= strObjTabs ~ "~" ~ obj.strName ~ "()";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "\tDispose();";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
+			lines ~= strObjTabs ~ "public void Dispose()";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "\tif( pObj != null )";
+			lines ~= strObjTabs ~ "\t{";
+			lines ~= strObjTabs ~ "\t\tpObj.Dispose();";
+			lines ~= strObjTabs ~ "\t\tpObj = null;";
+			lines ~= strObjTabs ~ "\t}";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+		}
+		else
+		{
+			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "() : " ~ obj.strInheritsFrom;
+			lines ~= strObjTabs ~ "\tsuper( \"" ~ obj.strFullName ~ "\" )";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
+			lines ~= strObjTabs ~ "protected " ~ obj.strName ~ "( string strClass )";
+			lines ~= strObjTabs ~ "\tsuper( strClass )";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
+		}
 		lines ~= "#endregion";
 
 		return lines;
@@ -1391,6 +1558,12 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			case StaticClass:
 				lines ~= strObjTabs ~ "public static class " ~ obj.strName;
 				lines ~= strObjTabs ~ "{";
+				foreach( subObj; obj.subTypes.byValue )
+				{
+					lines ~= generateCSharpForObject( subObj, depth + 1 );
+				}
+				lines ~= strSeparatorTabs;
+				lines ~= Blank;
 				foreach( iIndex, func; obj.arrFunctions )
 				{
 					lines ~= generateCSharpForFunction( obj, func, iIndex, depth + 1 );
@@ -1421,6 +1594,12 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 					lines ~= strObjTabs ~ strTok;
 				}
 				lines ~= strObjTabs ~ "{";
+				foreach( subObj; obj.subTypes.byValue )
+				{
+					lines ~= generateCSharpForObject( subObj, depth + 1 );
+				}
+				lines ~= strSeparatorTabs;
+				lines ~= Blank;
 				foreach( iIndex, func; obj.arrFunctions )
 				{
 					if( ( func.eFunctionKind & BoundFunction.FunctionKind.CodeGenerated ) == 0 )
@@ -1540,6 +1719,10 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 		thisObj.strVariables = currExportedObj.generateCSharpVariables();
 		thisObj.strTypeDecl = currExportedObj.generateCSharpTypeDecl();
+		if( currExportedObj.hasBaseType() )
+		{
+			thisObj.strInheritsFrom = currExportedObj.getBaseTypeNameCSharp();
+		}
 	}
 
 	foreach( ref currFunction; exportFunctions )
