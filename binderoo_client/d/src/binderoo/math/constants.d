@@ -64,7 +64,7 @@ auto SignMask( InputType, bool e1 = true, bool e2 = true, bool e3 = true, bool e
 		// This *should* CTFE once all bugs are fixed in the compiler
 
 		alias VectorType = Unqualified!( typeof( InputType.m_data ) );
-		alias VectorArrayType = TemplateParametersOf!( VectorType )[ 0 ];
+		alias VectorArrayType = TemplateParamsOf!( VectorType )[ 0 ];
 		alias PrimitiveType = ArrayValueType!( VectorArrayType );
 	
 		template Mask( bool bTrue )
@@ -171,7 +171,7 @@ auto FullMask( InputType, bool e1 = true, bool e2 = true, bool e3 = true, bool e
 		// This *should* CTFE once all bugs are fixed in the compiler
 
 		alias VectorType = Unqualified!( typeof( InputType.m_data ) );
-		alias VectorArrayType = TemplateParametersOf!( VectorType )[ 0 ];
+		alias VectorArrayType = TemplateParamsOf!( VectorType )[ 0 ];
 		alias PrimitiveType = ArrayValueType!( VectorArrayType );
 
 		template Mask( bool bTrue )
