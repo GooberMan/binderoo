@@ -111,6 +111,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 													| ( ( std.traits.functionAttributes!( symbol ) & std.traits.FunctionAttribute.ref_ )		? FunctionAttribute.ReturnsRef	: FunctionAttribute.Invalid )
 													;
 
+	enum					IsConstructor			= FunctionName == "__ctor";
 	enum					IsFinal					= ( FunctionAttributes & FunctionAttribute.Final ) != FunctionAttribute.Invalid;
 	enum					IsVirtual				= ( FunctionAttributes & FunctionAttribute.Virtual ) != FunctionAttribute.Invalid;
 	enum					IsAbstract				= ( FunctionAttributes & FunctionAttribute.Abstract ) != FunctionAttribute.Invalid;
@@ -142,6 +143,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 
 	// The struct/class that contains the element we're interested in.
 	alias 					ObjectType				= void;
+	alias					ObjectDescriptor		= TypeDescriptor!void;
 	alias					Parent					= binderoo.traits.Alias!( __traits( parent, symbol ) );
 	//------------------------------------------------------------------------
 
@@ -303,6 +305,7 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 													| ( ( std.traits.functionAttributes!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) & std.traits.FunctionAttribute.ref_ )			? FunctionAttribute.ReturnsRef	: FunctionAttribute.Invalid )
 													;
 
+	enum					IsConstructor			= FunctionName == "__ctor";
 	enum					IsFinal					= ( FunctionAttributes & FunctionAttribute.Final ) != FunctionAttribute.Invalid;
 	enum					IsVirtual				= ( FunctionAttributes & FunctionAttribute.Virtual ) != FunctionAttribute.Invalid;
 	enum					IsAbstract				= ( FunctionAttributes & FunctionAttribute.Abstract ) != FunctionAttribute.Invalid;
@@ -334,6 +337,7 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 
 	// The struct/class that contains the element we're interested in.
 	alias 					ObjectType				= T;
+	alias					ObjectDescriptor		= TypeDescriptor!T;
 	alias					Parent					= binderoo.traits.Alias!( __traits( parent, __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ) );
 	//------------------------------------------------------------------------
 
@@ -479,7 +483,7 @@ template FunctionDescriptors( T, CollectionOrder Order = DefaultCollectionOrder 
 			
 			static if( IsTemplatedType!( Type ) )
 			{
-				foreach( NewType; TemplateParametersOf!( Type ) )
+				foreach( NewType; TemplateParamsOf!( Type ) )
 				{
 					static if ( is( NewType ) )
 					{
@@ -654,7 +658,8 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 
 	private static string generateFullyQualifiedName( alias stringSymbol, alias renameString = TypeDescriptor.FunctionName )()
 	{
-		enum ConstString = Desc.IsConst ? " const" : "";
+		import std.string : startsWith;
+		enum ConstString = Desc.IsConst && !stringSymbol.startsWith( "CSharp" ) ? " const" : "";
 		enum StaticString = Desc.IsStatic ? "static " : "";
 
 		string generateParameterString( uint iIndex )()
@@ -669,17 +674,26 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 			}
 		}
 
-		static if( stringSymbol == "CDecl" )
+		static if( TypeDescriptor.IsConstructor )
 		{
-			enum pointerString = ( ReturnDescriptor.IsClass || ReturnDescriptor.IsInterface ) ? "* " : " ";
+			enum DeclString = TypeDescriptor.ObjectDescriptor.Name;
 		}
 		else
 		{
-			enum pointerString = " ";
-			enum namespaceString = "";
+			static if( stringSymbol == "CDecl" )
+			{
+				enum pointerString = ( ReturnDescriptor.IsClass || ReturnDescriptor.IsInterface ) ? "* " : " ";
+			}
+			else
+			{
+				enum pointerString = " ";
+				enum namespaceString = "";
+			}
+
+			enum DeclString = StaticString ~ mixin( "TypeString!( ReturnDescriptor )." ~ stringSymbol ) ~ pointerString ~ renameString;
 		}
 
-		return StaticString ~ mixin( "TypeString!( ReturnDescriptor )." ~ stringSymbol ) ~ pointerString ~ renameString ~ "( " ~ generateParameterString!( 0 )() ~ ")" ~ ConstString;
+		return DeclString ~ "( " ~ generateParameterString!( 0 )() ~ ")" ~ ConstString;
 	};
 	//------------------------------------------------------------------------
 
