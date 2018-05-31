@@ -57,6 +57,7 @@ namespace binderoo
 			, pObjectDescriptor( nullptr )
 			, pSymbol( pSymbolName )
 			, iRefCount( 0 )
+			, eFlags( 0 )
 		{
 		}
 		//--------------------------------------------------------------------
@@ -65,11 +66,12 @@ namespace binderoo
 		friend class binderoo::HostImplementation;
 
 	protected:
-		BIND_INLINE ImportedBase( void* pInstance, void* pDescriptor, const char* pClassTypeName, std::ptrdiff_t refcount )
+		BIND_INLINE ImportedBase( void* pInstance, void* pDescriptor, const char* pClassTypeName, int32_t refcount, int32_t flags )
 			: pObjectInstance( pInstance )
 			, pObjectDescriptor( pDescriptor )
 			, pSymbol( pClassTypeName )
 			, iRefCount( refcount )
+			, eFlags( flags )
 		{
 		}
 
@@ -79,7 +81,8 @@ namespace binderoo
 		void*						pObjectInstance;
 		void*						pObjectDescriptor;
 		const char*					pSymbol;
-		std::ptrdiff_t				iRefCount;
+		int32_t				iRefCount;
+		int32_t				eFlags;
 	};
 	//------------------------------------------------------------------------
 
@@ -102,16 +105,27 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
+		BIND_INLINE ImportedClassInstance( void* pRawObj, const char* pClassName )
+			: ImportedBase( pClassName )
+		{
+			pObjectInstance = pRawObj;
+			eFlags = ExternallyAllocated;
+
+			Host::getActiveHost()->registerImportedClassInstance( this );
+		}
+		//--------------------------------------------------------------------
+
 		// ImportedClassInstance currently does not allow you to duplicate another instance. But that will be coming soon...
 		ImportedClassInstance( ImportedClassInstance& otherInst ) = delete;
 		//--------------------------------------------------------------------
 
 		BIND_INLINE ImportedClassInstance( ImportedClassInstance&& otherInst )
-			: ImportedBase( otherInst.pObjectInstance, otherInst.pObjectDescriptor, otherInst.pSymbol, otherInst.iRefCount )
+			: ImportedBase( otherInst.pObjectInstance, otherInst.pObjectDescriptor, otherInst.pSymbol, otherInst.iRefCount, otherInst.eFlags )
 		{
 			otherInst.pObjectInstance = nullptr;
 			otherInst.pObjectDescriptor = nullptr;
 			otherInst.iRefCount = 0;
+			otherInst.eFlags = 0;
 
 			Host::getActiveHost()->registerImportedClassInstance( this );
 		}
@@ -129,10 +143,12 @@ namespace binderoo
 			pObjectDescriptor = otherInst.pObjectDescriptor;
 			pSymbol = otherInst.pSymbol;
 			iRefCount = otherInst.iRefCount;
+			eFlags = otherInst.eFlags;
 
 			otherInst.pObjectInstance = nullptr;
 			otherInst.pObjectDescriptor = nullptr;
 			otherInst.iRefCount = 0;
+			otherInst.eFlags = 0;
 
 			return *this;
 		}
@@ -154,26 +170,38 @@ namespace binderoo
 		BIND_INLINE	const _ty* const	get() const								{ return getInternal(); }
 		//--------------------------------------------------------------------
 
-		BIND_INLINE bool			isInstantiated() const						{ return getInternal() != nullptr; }
+		BIND_INLINE bool				isInstantiated() const					{ return getInternal() != nullptr; }
 		//--------------------------------------------------------------------
 
-		BIND_INLINE void			instantiate()
+		BIND_INLINE void				instantiate()
 		{
+			if( pObjectInstance != nullptr )
+			{
+				deinstantiate();
+			}
+
 			pObjectInstance = Host::getActiveHost()->createImportedClass( pSymbol );
 		}
 		//--------------------------------------------------------------------
 
-		BIND_INLINE void			deinstantiate()
+		BIND_INLINE void				deinstantiate()
 		{
-			if( pObjectInstance != nullptr )
+			if( eFlags ^ ExternallyAllocated && pObjectInstance != nullptr )
 			{
+				// TODO: notify the external allocator it's time to clean up...
 				Host::getActiveHost()->destroyImportedClass( pSymbol, pObjectInstance );
-				pObjectInstance = nullptr;
 			}
+			pObjectInstance = nullptr;
 		}
 		//--------------------------------------------------------------------
 
 	private:
+		enum : int32_t
+		{
+			ExternallyAllocated = 0x00000001,
+		};
+		//--------------------------------------------------------------------
+
 		BIND_INLINE _ty* const		getInternal()
 		{
 			return (_ty* const)pObjectInstance;
@@ -248,7 +276,14 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-		BIND_INLINE std::ptrdiff_t		addReferenceInstance()
+		BIND_INLINE void				registerRawInstance( void* pRawObj, const char* pClassName )
+		{
+			unacquire();
+			create( pRawObj, pClassName );
+		}
+		//--------------------------------------------------------------------
+
+		BIND_INLINE int32_t		addReferenceInstance()
 		{
 			if( isAcquired() )
 			{
@@ -259,7 +294,7 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-		BIND_INLINE std::ptrdiff_t		releaseInstance()
+		BIND_INLINE int32_t		releaseInstance()
 		{
 			unacquire();
 
@@ -268,7 +303,7 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		BIND_INLINE bool				isAcquired() const						{ return pRefCountedInstance != nullptr; }
-		BIND_INLINE std::ptrdiff_t		getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount : 0; }
+		BIND_INLINE int32_t				getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount : 0; }
 		BIND_INLINE _ty* const			operator->()							{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE const _ty* const	operator->() const						{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE						operator _ty* const ()					{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
@@ -291,6 +326,16 @@ namespace binderoo
 		BIND_INLINE void create( const char* pClassName )
 		{
 			pRefCountedInstance = AllocatorFunctions< AllocatorSpace::Host >::allocAndConstruct< ImportedClass >( pClassName, true );
+			if( pRefCountedInstance )
+			{
+				++pRefCountedInstance->iRefCount;
+			}
+		}
+		//--------------------------------------------------------------------
+
+		BIND_INLINE void create( void* pRawObj, const char* pClassName )
+		{
+			pRefCountedInstance = AllocatorFunctions< AllocatorSpace::Host >::allocAndConstruct< ImportedClass >( pRawObj, pClassName );
 			if( pRefCountedInstance )
 			{
 				++pRefCountedInstance->iRefCount;
@@ -435,11 +480,12 @@ BIND_C_API_BEGIN
 	typedef void* binderoo_imported_class_t;
 	typedef void* binderoo_class_ptr_t;
 
-	binderoo_imported_function_t	BIND_DLL binderoo_host_create_imported_function( char* pName, char* pSignature );
+	binderoo_imported_function_t	BIND_DLL binderoo_host_create_imported_function( const char* pName, const char* pSignature );
 	void							BIND_DLL binderoo_host_destroy_imported_function( binderoo_imported_function_t pFunc );
 	binderoo_func_ptr_t				BIND_DLL binderoo_host_get_function_ptr( binderoo_imported_function_t pFunc );
 
-	binderoo_imported_class_t		BIND_DLL binderoo_host_create_imported_class( char* pName );
+	binderoo_imported_class_t		BIND_DLL binderoo_host_create_imported_class( const char* pName );
+	binderoo_imported_class_t		BIND_DLL binderoo_host_register_imported_class( void* pObj, const char* pClassName );
 	void							BIND_DLL binderoo_host_addref_imported_class( binderoo_imported_class_t pObj );
 	void							BIND_DLL binderoo_host_release_imported_class( binderoo_imported_class_t pObj );
 	binderoo_class_ptr_t			BIND_DLL binderoo_host_get_class_ptr( binderoo_imported_class_t pObj );

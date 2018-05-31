@@ -74,6 +74,8 @@ namespace binderoo
 	private:
 		BoundObjectDLangCall		generateCSharpVariables;
 		BoundObjectDLangCall		generateCSharpTypeDecl;
+		BoundObjectDLangCall		hasBaseType;
+		BoundObjectDLangCall		getBaseTypeNameCSharp;
 	};
 	//------------------------------------------------------------------------
 

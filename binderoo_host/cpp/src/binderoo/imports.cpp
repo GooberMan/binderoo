@@ -84,9 +84,12 @@ struct Host_Class_C
 
 typedef std::map< InternalString, Host_Function_C*, std::less< InternalString > > FunctionMap;
 static FunctionMap s_functions;
+
+typedef std::map< void*, Host_Class_C* > RawObjectMap;
+static RawObjectMap s_rawObjects;
 //----------------------------------------------------------------------------
 
-binderoo_imported_function_t binderoo_host_create_imported_function( char* pName, char* pSignature )
+binderoo_imported_function_t binderoo_host_create_imported_function( const char* pName, const char* pSignature )
 {
 	InternalString strName( pName );
 
@@ -126,13 +129,36 @@ binderoo_func_ptr_t binderoo_host_get_function_ptr( binderoo_imported_function_t
 }
 //----------------------------------------------------------------------------
 
-binderoo_imported_class_t binderoo_host_create_imported_class( char* pName )
+binderoo_imported_class_t binderoo_host_create_imported_class( const char* pName )
 {
 	InternalString strName( pName );
 
 	Host_Class_C* pNewClass = new Host_Class_C { pName };
 	pNewClass->m_pObj.createNewInstance( strName.c_str() );
+
+	s_rawObjects[ pNewClass->m_pObj.get() ] = pNewClass;
+
 	return pNewClass;
+}
+//----------------------------------------------------------------------------
+
+binderoo_imported_class_t binderoo_host_register_imported_class( void* pObj, const char* pClassName )
+{
+	auto found = s_rawObjects.find( pObj );
+	if( found == s_rawObjects.end() )
+	{
+		Host_Class_C* pNewClass = new Host_Class_C { "Raw object" };
+		pNewClass->m_pObj.registerRawInstance( pObj, pClassName );
+
+		s_rawObjects[ pObj ] = pNewClass;
+
+		return pNewClass;
+	}
+	else
+	{
+		found->second->m_pObj.addReferenceInstance();
+		return found->second;
+	}
 }
 //----------------------------------------------------------------------------
 
@@ -144,8 +170,13 @@ void binderoo_host_addref_imported_class( binderoo_imported_class_t pClass )
 
 void binderoo_host_release_imported_class( binderoo_imported_class_t pClass )
 {
+	void* pObjPtr = ((Host_Class_C*)pClass)->m_pObj.get();
+
 	if( ((Host_Class_C*)pClass)->m_pObj.releaseInstance() == 0 )
 	{
+		auto found = s_rawObjects.find( pObjPtr );
+		s_rawObjects.erase( found );
+
 		delete (Host_Class_C*)pClass;
 	}
 }

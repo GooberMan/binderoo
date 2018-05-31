@@ -41,6 +41,12 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
+		public ImportedClass( IntPtr instance, string strClassName )
+		{
+			m_pObj = binderoo_host_register_imported_class( instance, strClassName );
+		}
+		//--------------------------------------------------------------------
+
 		public IntPtr Ptr
 		{
 			get { return binderoo_host_get_class_ptr( m_pObj ); }
@@ -50,8 +56,13 @@ namespace binderoo
 #region InternalMagic
 		[ DllImport( "binderoo_host", CallingConvention = CallingConvention.Cdecl ) ]
 		extern static private IntPtr binderoo_host_create_imported_class(
-			[ MarshalAs( UnmanagedType.LPStr ) ]
-			string pName );
+			[ MarshalAs( UnmanagedType.LPStr ) ] string pName );
+		//--------------------------------------------------------------------
+
+		[ DllImport( "binderoo_host", CallingConvention = CallingConvention.Cdecl ) ]
+		extern static private IntPtr binderoo_host_register_imported_class(
+			IntPtr pObj,
+			[ MarshalAs( UnmanagedType.LPStr ) ] string pClassName );
 		//--------------------------------------------------------------------
 
 		[ DllImport( "binderoo_host", CallingConvention = CallingConvention.Cdecl ) ]

@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _BINDEROO_HOST_C_API_H_
 
 #include "binderoo/defs.h"
+#include "binderoo/host.h"
 #include "binderoo/imports.h"
 /*--------------------------------------------------------------------------*/
 

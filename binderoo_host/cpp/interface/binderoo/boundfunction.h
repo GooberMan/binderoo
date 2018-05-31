@@ -42,7 +42,7 @@ namespace binderoo
 
 	struct BIND_ALIGN( 16 ) BoundFunction
 	{
-		enum class Resolution : char
+		enum class Resolution : unsigned short
 		{
 			Unresolved,
 			WaitingForImport,
@@ -54,7 +54,7 @@ namespace binderoo
 		};
 		//--------------------------------------------------------------------
 
-		enum class CallingConvention : char
+		enum class CallingConvention : unsigned short
 		{
 			Undefined,
 			C,
@@ -65,20 +65,32 @@ namespace binderoo
 		};
 		//--------------------------------------------------------------------
 
-		enum class FunctionKind : char
+		enum class FunctionKind : unsigned short
 		{
 			Undefined			= 0,
-			Static				= 0x1,
-			Method				= 0x2,
-			Virtual				= 0x4,
-			Abstract			= 0x8,
-			Constructor			= 0x10,
-			Destructor			= 0x20,
+			Static				= 0x0001,
+			Method				= 0x0002,
+			Virtual				= 0x0004,
+			Abstract			= 0x0008,
+			Constructor			= 0x0010,
+			Destructor			= 0x0020,
+			Property			= 0x0040,
+			CodeGenerated		= 0x0080,
+
+			ReturnsVoid			= 0x0100,
+			ReturnsBasicType	= 0x0200,
+			ReturnsStruct		= 0x0400,
+			ReturnsUnion		= 0x0800,
+			ReturnsClass		= 0x1000,
+			ReturnsArray		= 0x2000,
+			ReturnsPointer		= 0x4000,
+			ReturnsReference	= 0x8000,
+
 			VirtualDestructor	= Virtual | Destructor,
 		};
 		//--------------------------------------------------------------------
 
-		enum class Flags : char
+		enum class Flags : unsigned short
 		{
 			None				= 0,
 			OwnerIsAbstract		= 0x1,
@@ -121,7 +133,9 @@ namespace binderoo
 		BoundFunctionDLangCall	CParameterTypes;
 		BoundFunctionDLangCall	DParameterTypes;
 		BoundFunctionDLangCall	CSharpParameterTypes;
+		BoundFunctionDLangCall	CSharpReturnType;
 		BoundFunctionDLangCall	CSharpMarshalledParameterTypes;
+		BoundFunctionDLangCall	CSharpMarshalledReturnType;
 		BoundFunctionDLangCall	CSharpParameterNamesWithQualifiers;
 	};
 	//------------------------------------------------------------------------
