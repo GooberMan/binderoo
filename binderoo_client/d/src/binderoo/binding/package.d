@@ -66,7 +66,7 @@ mixin template BindVersionDeclaration( int iCurrentVersion )
 mixin template BindOnly( Type, int iCurrentVersion = 0, Options... )
 {
 	import std.traits : isSomeFunction;
-	mixin BindModuleStaticSetup!( ExtractTupleOf!( isSomeFunction, Options ) );
+	mixin BindModuleStaticSetup!( binderoo.traits.Filter!( isSomeFunction, Options ) );
 	
 	static void initialiseModuleBinding()
 	{
@@ -99,7 +99,7 @@ mixin template BindOnly( Type, int iCurrentVersion = 0, Options... )
 mixin template BindModule( int iCurrentVersion = 0, Options... )
 {
 	import std.traits : isSomeFunction;
-	mixin BindModuleStaticSetup!( ExtractTupleOf!( isSomeFunction, Options ) );
+	mixin BindModuleStaticSetup!( binderoo.traits.Filter!( isSomeFunction, Options ) );
 
 	void initialiseModuleBinding()
 	{
@@ -135,13 +135,13 @@ mixin template BindModule( int iCurrentVersion = 0, Options... )
 mixin template BindModules( int iCurrentVersion, Options... )
 {
 	import std.traits : isSomeFunction;
-	mixin BindModuleStaticSetup!( ExtractTupleOf!( isSomeFunction, Options ) );
+	mixin BindModuleStaticSetup!( binderoo.traits.Filter!( isSomeFunction, Options ) );
 
 	void initialiseModuleBinding()
 	{
 		enum Modules = ExtractAllOf!( string, Options )();
 		enum BindOptions = OptionsOf!( BindOption, Options )();
-		alias SpecificTypes = ExtractTupleOf!( IsSomeType, Options );
+		alias SpecificTypes = binderoo.traits.Filter!( IsSomeType, Options );
 
 		BoundModule[] 		allModules;
 		BoundObject[]		allObjectsToExport;
