@@ -50,7 +50,7 @@ struct BoundEnum
 	DString					strUnderlyingTypeC;
 	DString					strUnderlyingTypeCSharp;
 	
-	Slice!EnumValueInfo	vecAllValues;
+	Slice!EnumValueInfo		vecAllValues;
 }
 //----------------------------------------------------------------------------
 
