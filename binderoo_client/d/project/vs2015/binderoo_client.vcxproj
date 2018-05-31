@@ -67,6 +67,7 @@
     </Link>
     <DCompile>
       <ImportPaths>$(ProjectDir)..\..\src</ImportPaths>
+      <Deprecations>Allow</Deprecations>
     </DCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -78,6 +79,7 @@
     </ClCompile>
     <DCompile>
       <ImportPaths>$(ProjectDir)..\..\src</ImportPaths>
+      <Deprecations>Allow</Deprecations>
     </DCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
