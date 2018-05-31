@@ -101,13 +101,32 @@ template IsInOut( T )
 
 template IsUserType( T )
 {
+	static if( IsPointer!T )
+	{
+		enum IsUserType = IsUserType!( PointerTarget!T );
+	}
+	else
+	{
+		enum IsUserType = is( T == struct ) || is( T == class ) || is( T == enum ) || is( T == interface ) || is( T == union );
+	}
+}
+//----------------------------------------------------------------------------
+
+template IsUserType( T : ET[], ET )
+{
+	enum IsUserType = IsUserType!ET;
+}
+//----------------------------------------------------------------------------
+
+template IsUserType( alias T : U!( Params ), alias U, Params... )
+{
 	enum IsUserType = is( T == struct ) || is( T == class ) || is( T == enum ) || is( T == interface ) || is( T == union );
 }
 //----------------------------------------------------------------------------
 
-template IsUserType( T : A*, A )
+template IsUserType( T : U!( Params ), alias U, Params... )
 {
-	enum IsUserType = IsUserType!A;
+	enum IsUserType = is( T == struct ) || is( T == class ) || is( T == enum ) || is( T == interface ) || is( T == union );
 }
 //----------------------------------------------------------------------------
 
@@ -152,9 +171,17 @@ template IntegralTypeOf( T )
 	{
 		alias IntegralTypeOf = T;
 	}
+	else static if( is( T U == enum ) )
+	{
+		alias IntegralTypeOf = IntegralTypeOf!U;
+	}
 	else static if( is( T == bool ) )
 	{
 		alias IntegralTypeOf = byte;
+	}
+	else
+	{
+		alias IntegralTypeOf = void;
 	}
 }
 //----------------------------------------------------------------------------
@@ -283,6 +310,12 @@ template IsStaticArray( A : T[], T )
 template IsStaticArray( A : T[ L ], T, size_t L )
 {
 	enum IsStaticArray = true;
+}
+//----------------------------------------------------------------------------
+
+template StaticArrayLength( A : T[ L ], T, size_t L )
+{
+	enum StaticArrayLength = L;
 }
 //----------------------------------------------------------------------------
 
@@ -451,29 +484,15 @@ template Unqualified( T )
 }
 //----------------------------------------------------------------------------
 
-template TemplateParametersOf( T )
+template IsTemplate( alias T )
 {
-	static if( !IsMutable!( T ) )
-	{
-		alias UnqualifiedType = Unqualified!( T );
-		alias TemplateParametersOf = TemplateParametersOf!( UnqualifiedType );
-	}
-	else
-	{
-		alias TemplateParametersOf = binderoo.traits.AliasSeq!( );
-	}
+	enum IsTemplate = __traits( isTemplate, T );
 }
 //----------------------------------------------------------------------------
 
-template TemplateParametersOf( T : U!( Params ), alias U, Params... )
+template IsTemplate( T )
 {
-	alias TemplateParametersOf = binderoo.traits.AliasSeq!( Params );
-}
-//----------------------------------------------------------------------------
-
-template TemplateParametersOf( T : __vector( Type[ Length ] ), Type, size_t Length )
-{
-	alias TemplateParametersOf = binderoo.traits.AliasSeq!( Type[ Length ] );
+	enum IsTemplate = __traits( isTemplate, T );
 }
 //----------------------------------------------------------------------------
 
@@ -502,9 +521,15 @@ template IsTemplatedType( alias T : U!( Params ), alias U, Params... )
 }
 //----------------------------------------------------------------------------
 
-template IsTemplatedType( T : U[], U )
+template IsTemplatedType( T : U!( Params )[], alias U, Params )
 {
-	enum IsTemplatedType = IsTemplatedType!( U );
+	enum IsTemplatedType = true;
+}
+//----------------------------------------------------------------------------
+
+template IsTemplatedType( alias T : U!( Params )[], alias U, Params... )
+{
+	enum IsTemplatedType = true;
 }
 //----------------------------------------------------------------------------
 
@@ -532,6 +557,18 @@ template TemplateOf( T : U!( Params ), alias U, Params... )
 }
 //----------------------------------------------------------------------------
 
+template TemplateOf( alias T : U!( Params )[], alias U, Params... )
+{
+	alias TemplateOf = U;
+}
+//----------------------------------------------------------------------------
+
+template TemplateOf( T : U!( Params )[], alias U, Params... )
+{
+	alias TemplateOf = U;
+}
+//----------------------------------------------------------------------------
+
 template TemplateParamsOf( alias T : U!( Params ), alias U, Params... )
 {
 	alias TemplateParamsOf = binderoo.traits.AliasSeq!( Params );
@@ -541,6 +578,24 @@ template TemplateParamsOf( alias T : U!( Params ), alias U, Params... )
 template TemplateParamsOf( T: U!( Params ), alias U, Params... )
 {
 	alias TemplateParamsOf = binderoo.traits.AliasSeq!( Params );
+}
+//----------------------------------------------------------------------------
+
+template TemplateParamsOf( alias T : U!( Params )[], alias U, Params... )
+{
+	alias TemplateParamsOf = binderoo.traits.AliasSeq!( Params );
+}
+//----------------------------------------------------------------------------
+
+template TemplateParamsOf( T: U!( Params )[], alias U, Params... )
+{
+	alias TemplateParamsOf = binderoo.traits.AliasSeq!( Params );
+}
+//----------------------------------------------------------------------------
+
+template TemplateParamsOf( T : __vector( Type[ Length ] ), Type, size_t Length )
+{
+	alias TemplateParamsOf = binderoo.traits.AliasSeq!( Type[ Length ] );
 }
 //----------------------------------------------------------------------------
 
@@ -659,12 +714,22 @@ template IsAlias( alias Parent, string SymbolName )
 }
 //----------------------------------------------------------------------------
 
+struct SymbolOverride
+{
+	bool Overrides;
+	string Name;
+}
+//----------------------------------------------------------------------------
+
 struct DSymbolToStringProvider
 {
 	enum String( T ) = T.stringof;
 	enum String( alias T ) = T.stringof;
+	enum SymbolOverride OverrideString( T ) = { false, T.stringof };
 	enum TemplateOpen = "!(";
 	enum TemplateClose = ")";
+	enum ConstOpen = "const( ";
+	enum ConstClose = " )";
 	enum NamespaceSeparator = ".";
 }
 //----------------------------------------------------------------------------
@@ -673,17 +738,37 @@ struct CSymbolToStringProvider
 {
 	enum String( T ) = T.stringof;
 	enum String( alias T ) = T.stringof;
+	enum SymbolOverride OverrideString( T ) = { false, T.stringof };
 	enum TemplateOpen = "<";
 	enum TemplateClose = ">";
+	enum ConstOpen = "const ";
+	enum ConstClose = "";
 	enum NamespaceSeparator = "::";
 }
 //----------------------------------------------------------------------------
 
 string FullTypeName( Symbol, alias StringProvider = DSymbolToStringProvider )()
 {
-	static if( is( Symbol A == const A ) )
+	static if( StringProvider.OverrideString!Symbol.Overrides )
 	{
-		return "const(" ~ FullTypeName!( A, StringProvider ) ~ ")";
+		return StringProvider.OverrideString!Symbol.Name;
+	}
+	else static if( IsNonAssociativeArray!Symbol )
+	{
+		static if( IsStaticArray!Symbol )
+		{
+			import std.conv : to;
+			enum ArrayString = "[" ~ StaticArrayLength!Symbol.to!string ~ "]";
+		}
+		else
+		{
+			enum ArrayString = "[]";
+		}
+		return FullTypeName!( ArrayValueType!Symbol, StringProvider ) ~ ArrayString;
+	}
+	else static if( is( Symbol A == const A ) )
+	{
+		return StringProvider.ConstOpen ~ FullTypeName!( A, StringProvider ) ~ StringProvider.ConstClose;
 	}
 	else static if( IsTemplatedType!Symbol )
 	{
@@ -800,15 +885,26 @@ string ModuleName( T : PT*, PT )() if( IsTemplatedType!PT )
 }
 //----------------------------------------------------------------------------
 
-string ModuleName( T : AT[], AT )() if( IsTemplatedType!AT )
+string ModuleName( T : AT[], AT )()
 {
-	return ModuleName!( TemplateOf!AT );
+	static if( IsTemplatedType!AT )
+	{
+		return ModuleName!( TemplateOf!AT );
+	}
+	else
+	{
+		return ModuleName!AT;
+	}
 }
 //----------------------------------------------------------------------------
 
 string ModuleName( alias Symbol )()
 {
-	static if( is( Symbol : PT*, PT ) )
+	static if( is( Symbol : KT[], KT ) )
+	{
+		return ModuleName!KT;
+	}
+	else static if( is( Symbol : PT*, PT ) )
 	{
 		return ModuleName!PT;
 	}
@@ -864,8 +960,16 @@ string[] gatherImports( T )()
 		}
 	}
 
-	alias UT = Unqualified!T;
+	static if( IsNonAssociativeArray!T )
+	{
+		alias UT = Unqualified!( ArrayValueType!T );
+	}
+	else
+	{
+		alias UT = Unqualified!T;
+	}
 
+	import std.conv : to;
 	static if( IsUserType!UT )
 	{
 		import std.traits;
@@ -875,7 +979,9 @@ string[] gatherImports( T )()
 
 		static if( IsTemplatedType!UT )
 		{
-			foreach( Parameter; TemplateParametersOf!UT )
+			addModule( ModuleName!( TemplateOf!UT ) );
+
+			foreach( Parameter; TemplateParamsOf!UT )
 			{
 				static if ( is( Parameter ) )
 				{
