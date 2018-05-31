@@ -246,7 +246,7 @@ template CTypeString( T )
 	{
 		static if( IsTemplatedType!( T ) )
 		{
-			enum TemplateParametersString = "< " ~ TemplateParameters!( 0u, TemplateParametersOf!( T ) ) ~ " >";
+			enum TemplateParametersString = "< " ~ TemplateParameters!( 0u, TemplateParamsOf!( T ) ) ~ " >";
 		}
 		else
 		{
@@ -337,6 +337,11 @@ template CSharpTypeString( T, MarshallingStage stage = MarshallingStage.Unmarsha
 		{
 			enum CSharpTypeString = stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "SliceString" : "string";
 		}
+/+		else static if( IsStaticArray!T )
+		{
+			import std.conv : to;
+			enum CSharpTypeString = "fixed " ~ CSharpTypeString!( ArrayValueType!T ) ~ "[ " ~ StaticArrayLength!T.to!string ~ " ]";
+		}+/
 		else
 		{
 			enum CSharpTypeString = stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "Slice< " ~ CSharpTypeString!( ArrayValueType!T ) ~ " >" : CSharpTypeString!( ArrayValueType!T ) ~ "[]";
@@ -369,8 +374,12 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 	{
 		enum String( T ) = CSharpTypeString!( T, stage );
 		enum String( alias T ) = CSharpTypeString!( T, stage );
+		enum SymbolOverride OverrideString( T ) = { false, T.stringof };
+		enum SymbolOverride OverrideString( T : string ) = { true, stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "SliceString" : "string" };
 		enum TemplateOpen = "<";
 		enum TemplateClose = ">";
+		enum ConstOpen = "";
+		enum ConstClose = "";
 		enum NamespaceSeparator = ".";
 	}
 	//------------------------------------------------------------------------
@@ -382,9 +391,9 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 	else
 	{
 		import std.algorithm : reverse, countUntil;
-		enum CSharpFullTypeString = FullTypeName!( T, CSharpSymbolToStringProvider ); //[ 0 .. $ - T.stringof.length ] ~ CSharpTypeString!( T, stage );
+		enum CSharpFullTypeString = FullTypeName!( T, CSharpSymbolToStringProvider );
 	}
-	//pragma( msg, T.stringof ~ " -> " ~ FullTypeName!T ~ " --> " ~ CSharpFullTypeString );
+	//pragma( msg, "C#-ifying " ~ T.stringof ~ " at stage " ~ stage.stringof ~ " -> " ~ FullTypeName!T ~ " --> " ~ CSharpFullTypeString );
 }
 
 struct TypeString( T, bool bIsRef = false )
@@ -419,16 +428,17 @@ struct TypeString( T, bool bIsRef = false )
 		static if( ( IsConst!( T ) || IsImmutable!( T ) )
 					&& bIsRef )
 		{
-			return "in " ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqual!( T ), stage ) );
+			return "in " ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqualified!( T ), stage ) );
 		}
 		else
 		{
-			return ( bIsRef ? "ref " : "" ) ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( T, stage ) );
+			return ( bIsRef ? "ref " : "" ) ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqualified!( T ), stage ) );
 		}
 	}
 	//------------------------------------------------------------------------
 
 	enum			FullyQualifiedDDecl				= typeStringD( FullTypeName!( T ) );
+	enum			FullyQualifiedDDeclNoRef		= FullTypeName!( T );
 	enum			DDecl							= typeStringD( T.stringof );
 	enum			CDecl							= typeStringC( CTypeString!( T ) );
 	enum			UnqualifiedCDecl				= unqualC( typeStringC( CTypeString!( T ) ) );
