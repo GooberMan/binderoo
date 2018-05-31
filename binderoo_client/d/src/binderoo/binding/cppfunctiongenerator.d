@@ -47,6 +47,7 @@ public import binderoo.slice;
 //
 // These functions are directly callable using the required parameters, and you
 // can obtain the address of the function just as easily
+
 struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 {
 	import std.string : replace, toLower;
@@ -75,14 +76,15 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 				output ~= gatherImports!( Param.UnqualifiedType );
 			}
 
-			return output.joinWith!( x => "static " ~ x )( "\n" );
+			return output.joinWith!( x => "static " ~ x )( "\n" ) ~ "\nstatic import std.traits;";
 		}
 
 		enum FnName = Desc.FunctionName;
 
 		static string generate()
 		{
-			mixin( collectModules() );
+			enum Modules = collectModules();
+			mixin( Modules );
 			// WHY DO I HAVE TO KEEP DOING THIS...
 			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ).replace( "!", "_" ).replace( "(", "_" ).replace( ")", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nexport extern( %s ) static ";
 			enum ExportDeclC = MangleBase.format( "c", "C" );
@@ -115,16 +117,39 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			}
 			static foreach( iIndex, Param; Desc.ParametersAsTuple )
 			{
-				static if( Param.IsArray )
+				static if( Param.Name.length == 0 )
 				{
-					strWrapperDeclarators ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ "* _int_p" ~ iIndex.to!string ~ " = cast( " ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ "*)&" ~ Param.Name ~ ";";
-					strParameters ~= SliceOf!( Param.Type ).stringof ~ " " ~ Param.Name;
-					strParameterNames ~= "*_int_p" ~ iIndex.to!string;
+					pragma( msg, "Zero length parameter encountered of type " ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl );
+				}
+				static if( is( Param.Type == delegate ) || is( Param.Type == function ) )
+				{
+					pragma( msg, "Delegate encountered: " ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " ===> " ~ TypeString!( TypeDescriptor!( SetFunctionAttributes!( Param.Type, "D", functionAttributes!( Param.Type ) ) ) ).FullyQualifiedDDecl );
+
+					strWrapperDeclarators ~= "auto _wrapdel_" ~ iIndex.to!string ~ " = cast( SetFunctionAttributes!( " ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ ", \"D\", functionAttributes!( " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string ) ~ " ) ) ) " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string ) ~ ";";
+					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDeclNoRef ~ " " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string );
+					strParameterNames ~= ( Param.Name.length ? Param.Name : "_wrapdel_" ~ iIndex.to!string );
+				}
+				else static if( Param.IsArray )
+				{
+					static if( IsStaticArray!( Param.Type ) )
+					{
+						//pragma( msg, "Static array encountered:" ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl );
+
+						strWrapperDeclarators ~= "import std.algorithm : copy; " ~ TypeString!( TypeDescriptor!( Unqualified!( Param.Type ) ) ).FullyQualifiedDDeclNoRef ~ " _arr_p" ~ iIndex.to!string ~ "; " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string ) ~ ".toSlice.copy( _arr_p" ~ iIndex.to!string ~ "[ 0 .. " ~ StaticArrayLength!( Param.Type ).to!string ~ " ] );";
+						strParameters ~= SliceOf!( Param.Type ).stringof ~ " " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string );
+						strParameterNames ~= "_arr_p" ~ iIndex.to!string;
+					}
+					else
+					{
+						strWrapperDeclarators ~= TypeString!( Param.Descriptor ).FullyQualifiedDDeclNoRef ~ "* _arr_p" ~ iIndex.to!string ~ " = cast( " ~ TypeString!( Param.Descriptor ).FullyQualifiedDDeclNoRef ~ "*)&" ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string ) ~ ";";
+						strParameters ~= SliceOf!( Param.Type ).stringof ~ " " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string );
+						strParameterNames ~= "*_arr_p" ~ iIndex.to!string;
+					}
 				}
 				else
 				{
-					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDecl ~ " " ~ Param.Name;
-					strParameterNames ~= Param.Name;
+					strParameters ~= TypeString!( Param.Descriptor ).FullyQualifiedDDeclNoRef ~ " " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string );
+					strParameterNames ~= ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string );
 				}
 			}
 
@@ -136,7 +161,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			}
 			static if( IsNonAssociativeArray!( Desc.ReturnType ) )
 			{
-				appendToBoth( SliceOf!( Desc.ReturnType ).stringof );
+				appendToBoth( FullTypeName!( SliceOf!( Desc.ReturnType ) ) );
 			}
 			else
 			{
@@ -153,12 +178,17 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			appendToBoth( "( " ~ strParameters.joinWith( ", " ) ~ " ) { " ~ strWrapperDeclarators.joinWith( " " ) ~ " " );
 			static if( Desc.HasReturnType )
 			{
-				static if( Desc.ReturnsRef )
+				static if( !Desc.IsConstructor )
 				{
-					appendToBoth( "ref " );
+					static if( Desc.ReturnsRef )
+					{
+						appendToBoth( FullTypeName!( Desc.ReturnType ) ~ "* retval = &" );
+					}
+					else
+					{
+						appendToBoth( FullTypeName!( Desc.ReturnType ) ~ " retval = " );
+					}
 				}
-
-				appendToBoth( FullTypeName!( Desc.ReturnType ) ~ " retval = " );
 			}
 
 			static if( Desc.IsMemberFunction )
@@ -179,17 +209,24 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 				appendToBoth( "; return " );
 				static if( Desc.ReturnsRef )
 				{
-					strCOutput ~= "&";
+					strCPPOutput ~= "*";
 				}
 
-				static if( IsNonAssociativeArray!( Desc.ReturnType ) )
+				static if( Desc.IsConstructor )
 				{
-					appendToBoth( "*( cast( " ~ SliceOf!( Desc.ReturnType ).stringof ~ "* )&" );
+					appendToBoth( "pThis" );
 				}
-				appendToBoth( "retval" );
-				static if( IsNonAssociativeArray!( Desc.ReturnType ) )
+				else
 				{
-					appendToBoth( " )" );
+					static if( IsNonAssociativeArray!( Desc.ReturnType ) )
+					{
+						appendToBoth( "*( cast( " ~ FullTypeName!( SliceOf!( Desc.ReturnType ) ) ~ "* )&" );
+					}
+					appendToBoth( "retval" );
+					static if( IsNonAssociativeArray!( Desc.ReturnType ) )
+					{
+						appendToBoth( " )" );
+					}
 				}
 			}
 
@@ -198,7 +235,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			return strCOutput ~ "\n" ~ strCPPOutput ~ "\nalias FuncCDecl = " ~ FnName ~ "CDecl;\nalias FuncCPPDecl = " ~ FnName ~ "CPPDecl;";
 		}
 
-		enum Defn = collectModules() ~ "\n\n" ~ generate();
+		enum Defn = collectModules() ~ "\n\n" ~ generate() ~ "\n//----------------------------------------------------------------------------\n";
 		//pragma( msg, Defn );
 		mixin( Defn );
 	}
@@ -292,7 +329,8 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 					~ "\nalias GetterCDecl = " ~ Desc.Name ~ "_GetterCDecl;"
 					~ "\nalias SetterCDecl = " ~ Desc.Name ~ "_SetterCDecl;"
 					~ "\nalias GetterCPPDecl = " ~ Desc.Name ~ "_GetterCPPDecl;"
-					~ "\nalias SetterCPPDecl = " ~ Desc.Name ~ "_SetterCPPDecl;";
+					~ "\nalias SetterCPPDecl = " ~ Desc.Name ~ "_SetterCPPDecl;"
+					~ "\n//----------------------------------------------------------------------------\n";
 		//pragma( msg, Defn );
 		mixin( Defn );
 	}
