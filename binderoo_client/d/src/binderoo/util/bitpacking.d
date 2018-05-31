@@ -63,7 +63,8 @@ struct PackSize
 
 mixin template BitPack( alias Descriptor, bool bHumanReadableNames = false )
 {
-	version( BitPackCompileTimeDebug ) pragma( msg, GenerateBitPackBody!( Descriptor, "BitPack" ~ Descriptor.stringof.fnv1a_64.to!string )() );
+	version( BitPackCompileTimeDebug ) import std.conv : to;
+	version( BitPackCompileTimeDebug ) pragma( msg, GenerateBitPackBody!( PackOfType!Descriptor, bHumanReadableNames ) );
 	mixin( GenerateBitPackBody!( PackOfType!Descriptor, bHumanReadableNames )() );
 }
 //----------------------------------------------------------------------------
@@ -77,7 +78,7 @@ mixin template BitPack( string ElementsWithPackingInfoAndDefaultValuesAndSemicol
 // IMPLEMENTATION FOLLOWS
 //----------------------------------------------------------------------------
 
-// version = BitPackCompileTimeDebug;
+//version = BitPackCompileTimeDebug;
 
 import binderoo.traits;
 import binderoo.objectprivacy;
@@ -219,8 +220,8 @@ string GenerateBitPackBody( Descriptor, bool bHumanReadableNames )()
 		int iThisVariableBitStart = iBitStart;
 		int iBitsLeft = PackSizeUDA.iPackSize;
 
-		version( BitPackCompileTimeDebug ) strOutput ~= "// " ~ VariableName ~ " accessors";
-		version( BitPackCompileTimeDebug ) strOutput ~= "// -> Start bit: " ~ to!string( iThisVariableBitStart ) ~ ", total size: " ~ to!string( iBitsLeft );
+		version( BitPackCompileTimeDebug ) strOutput ~= "// " ~ VariableName ~ " accessors\n";
+		version( BitPackCompileTimeDebug ) strOutput ~= "// -> Start bit: " ~ to!string( iThisVariableBitStart ) ~ ", total size: " ~ to!string( iBitsLeft ) ~ ", default: " ~ InitValue.to!string ~ "\n";
 
 		string strGetter = "final @property " ~ VariableTypeName ~ " " ~ VariableName ~ "() { " ~ StorageTypeName ~ " storage = 0; ";
 		string strSetter = "final @property " ~ VariableTypeName ~ " " ~ VariableName ~ "( " ~ VariableTypeName ~ " val ) in { import std.conv : to; assert( val >= 0, \"Negative values currently unsupported.\" ); assert( val < " ~ to!string( cast(StorageType)1 << PackSizeUDA.iPackSize ) ~ ", \"Value \" ~ to!string( val ) ~ \" is larger than " ~ VariableName ~ " can hold.\" ); } body { ";
@@ -236,7 +237,7 @@ string GenerateBitPackBody( Descriptor, bool bHumanReadableNames )()
 
 			initialisers[ iThisArrayIndex ] = cast( ubyte )( ( initialisers[ iThisArrayIndex ] & iThisInvertMask ) | ( ( ( InitValue >> iTotalShift ) & BitMask( iBitsThisAccess ) ) << iThisStartBit ) );
 				
-			version( BitPackCompileTimeDebug ) strOutput ~= "// -> Array index: " ~ to!string( iThisArrayIndex ) ~ ", bits this access: " ~ to!string( iBitsThisAccess ) ~ ", start bit: " ~ to!string( iThisStartBit ) ~ ", this mask: " ~ to!string( iThisMask );
+			version( BitPackCompileTimeDebug ) strOutput ~= "// -> Array index: " ~ to!string( iThisArrayIndex ) ~ ", bits this access: " ~ to!string( iBitsThisAccess ) ~ ", start bit: " ~ to!string( iThisStartBit ) ~ ", this mask: " ~ to!string( iThisMask ) ~ "\n";
 
 			strGetter ~= "storage |= ( cast( " ~ StorageTypeName ~ " )( " ~ NameAlias ~ "[ " ~ to!string( iThisArrayIndex ) ~ " ] & " ~ to!string( iThisMask ) ~ " ) >> " ~ to!string( iThisStartBit ) ~ " ) << " ~ to!string( iTotalShift ) ~ "; ";
 			strSetter ~= NameAlias ~ "[ " ~ to!string( iThisArrayIndex ) ~ " ] = cast( ubyte )( ( " ~ NameAlias ~ "[ " ~ to!string( iThisArrayIndex ) ~ " ] & " ~ to!string( iThisInvertMask ) ~ " ) | ( ( ( val >> " ~ to!string( iTotalShift ) ~ " ) & " ~ to!string( BitMask( iBitsThisAccess ) ) ~ " ) << " ~ to!string( iThisStartBit ) ~ " ) ); ";
