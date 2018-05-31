@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 module binderoo.binding.cheaderparsing;
 
-public import binderoo.binding.binding;
+public import binderoo.binding;
 public import binderoo.binding.inheritance;
 public import binderoo.binding.cheaderobjects;
 import binderoo.traits;
@@ -235,7 +235,7 @@ string GenerateBinderooCodeFromHeader( CHeader header )
 							~ "// \"binderoo.binding.cheaderparsing.ParseAndGenerateBinderooCodeFromHeader\"\n"
 							~ BreakLine;
 
-	enum Imports			= "public import binderoo.binding.binding;\n"
+	enum Imports			= "public import binderoo.binding;\n"
 							~ "public import binderoo.binding.inheritance;\n"
 							~ "public import binderoo.traits;\n"
 							~ BreakLine;
@@ -1089,7 +1089,6 @@ ref CAggregate HandleAggregateStatement( ref CAggregate output, ref CObjectVisib
 				case "template":
 					bHandlingTemplate = true;
 					goto default;
-					break;
 
 				default:
 					if( bHandlingTemplate )
@@ -2327,7 +2326,6 @@ int ResolveExpression( ref CHeader header, ref string[] strTokens )
 				pendingOps = [ Operation.init ];
 				break tokenparse;
 			}
-			break;
 
 		case "||":
 			int iResolvedSuccessfully = header.ResolveOperations( pendingOps );
@@ -2341,7 +2339,6 @@ int ResolveExpression( ref CHeader header, ref string[] strTokens )
 				pendingOps = [ Operation.init ];
 				break tokenparse;
 			}
-			break;
 
 		case "(":
 			string[] strNewTokens;
