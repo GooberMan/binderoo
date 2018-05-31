@@ -53,7 +53,7 @@ struct BoundFunctionFunctions( Descriptor )
 
 	static string CSharpPrototype()
 	{
-		return FunctionString!( Descriptor ).CSharpDecl;
+		return ( Descriptor.IsVirtual ? "virtual " : "" ) ~ FunctionString!( Descriptor ).CSharpDecl;
 	}
 
 	static string CSharpMarshalledPrototype()
@@ -129,6 +129,11 @@ struct BoundFunctionFunctions( Descriptor )
 		return Types;
 	}
 
+	static string CSharpReturnType()
+	{
+		return TypeString!( Descriptor.ReturnType ).CSharpDecl;
+	}
+
 	static string[] CSharpMarshalledParameterTypes()
 	{
 		string[] generate()
@@ -147,6 +152,11 @@ struct BoundFunctionFunctions( Descriptor )
 		return Types;
 	}
 
+	static string CSharpMarshalledReturnType()
+	{
+		return TypeString!( Descriptor.ReturnType ).CSharpMarshalledDecl;
+	}
+
 	static string[] CSharpParameterNamesWithQualifiers()
 	{
 		string[] generate()
@@ -156,7 +166,7 @@ struct BoundFunctionFunctions( Descriptor )
 			{
 				static if( param.IsArray )
 				{
-					output ~= "new " ~ CSharpTypeString!( param.Type, MarshallingStage.Intermediary ) ~ "( " ~ param.Name ~ " ).SliceData";
+					output ~= "new Slice< " ~ CSharpTypeString!( ArrayValueType!( param.Type ), MarshallingStage.Intermediary ) ~ " >( " ~ param.Name ~ " ).SliceData";
 				}
 				else
 				{
@@ -177,7 +187,7 @@ align( 16 )
 struct BoundFunction
 {
 	@CTypeName( "binderoo::BoundFunction::Resolution", "binderoo/boundfunction.h" )
-	enum Resolution : char
+	enum Resolution : ushort
 	{
 		Unresolved,
 		WaitingForImport,
@@ -186,7 +196,7 @@ struct BoundFunction
 	}
 
 	@CTypeName( "binderoo::BoundFunction::CallingConvention", "binderoo/boundfunction.h" )
-	enum CallingConvention : char
+	enum CallingConvention : ushort
 	{
 		Undefined,
 		C,
@@ -195,22 +205,32 @@ struct BoundFunction
 	}
 
 	@CTypeName( "binderoo::BoundFunction::FunctionKind", "binderoo/boundfunction.h" )
-	enum FunctionKind : char
+	enum FunctionKind : ushort
 	{
 		Undefined			= 0,
-		Static				= 0x1,
-		Method				= 0x2,
-		Virtual				= 0x4,
-		Abstract			= 0x8,
-		Constructor			= 0x10,
-		Destructor			= 0x20,
-		Property			= 0x40,
-		CodeGenerated		= 0x80,
+		Static				= 0x0001,
+		Method				= 0x0002,
+		Virtual				= 0x0004,
+		Abstract			= 0x0008,
+		Constructor			= 0x0010,
+		Destructor			= 0x0020,
+		Property			= 0x0040,
+		CodeGenerated		= 0x0080,
+
+		ReturnsVoid			= 0x0100,
+		ReturnsBasicType	= 0x0200,
+		ReturnsStruct		= 0x0400,
+		ReturnsUnion		= 0x0800,
+		ReturnsClass		= 0x1000,
+		ReturnsArray		= 0x2000,
+		ReturnsPointer		= 0x4000,
+		ReturnsReference	= 0x8000,
+
 		VirtualDestructor	= Virtual | Destructor,
 	}
 
 	@CTypeName( "binderoo::BoundFunction::Flags", "binderoo/boundfunction.h" )
-	enum Flags : char
+	enum Flags : ushort
 	{
 		None			= 0,
 		OwnerIsAbstract	= 0x1,
@@ -248,7 +268,9 @@ struct BoundFunction
 	StringArrayGen			CParameterTypes;
 	StringArrayGen			DParameterTypes;
 	StringArrayGen			CSharpParameterTypes;
+	StringGen				CSharpReturnType;
 	StringArrayGen			CSharpMarshalledParameterTypes;
+	StringGen				CSharpMarshalledReturnType;
 	StringArrayGen			CSharpParameterNamesWithQualifiers;
 }
 //----------------------------------------------------------------------------
