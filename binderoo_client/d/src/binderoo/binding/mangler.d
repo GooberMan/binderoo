@@ -35,8 +35,11 @@ public import binderoo.functiondescriptor;
 
 import binderoo.variabledescriptor;
 import binderoo.typedescriptor;
+import binderoo.slice;
 import std.string : replace;
 import std.conv : to;
+
+// Information obtained from http://students.mimuw.edu.pl/~zbyszek/asm/doc/calling_conventions.pdf
 
 template CMangler( alias Func ) if( IsTemplatedType!Func && IsBaseTemplate!( FunctionDescriptor, Func ) )
 {
@@ -68,9 +71,26 @@ template CPPMangler( alias Func ) if( IsTemplatedType!Func && IsBaseTemplate!( F
 		private string[] allSymbolNames;
 		private string[] duplicatedSymbolNames;
 
+		ptrdiff_t iBaseIndex = 1;
+
+		private string[] mangleSymbol( alias Symbol )() const
+		{
+			string[] output;
+			static if( HasUDA!( Symbol, CTypeName ) )
+			{
+				enum ThisTypeName = GetUDA!( Symbol, CTypeName );
+			}
+
+			return output;
+		}
+
 		private string[] mangleAll( alias Symbol )() const
 		{
-			static if( !__traits( compiles, __traits( parent, Symbol ) ) )
+			/+static if( IsTemplatedType!Symbol )
+			{
+				return [ __traits( identifier, Symbol ) ~ "@" ] ~ mangleAll!( __traits( parent, TemplateOf!( Symbol ) ) );
+			}
+			else+/ static if( !__traits( compiles, __traits( parent, Symbol ) ) )
 			{
 				return [ __traits( identifier, Symbol ) ~ "@" ];
 			}
@@ -107,7 +127,7 @@ template CPPMangler( alias Func ) if( IsTemplatedType!Func && IsBaseTemplate!( F
 					}
 					else
 					{
-						thisMangle = ( iIndex + 1 ).to!string;
+						thisMangle = ( iIndex + iBaseIndex ).to!string;
 					}
 				}
 				else
@@ -142,6 +162,12 @@ template CPPMangler( alias Func ) if( IsTemplatedType!Func && IsBaseTemplate!( F
 				{
 					return "PEA" ~ TypeIdentifier!( TypeDescriptor!( binderoo.traits.PointerTarget!( Type.Type ), false ) );
 				}
+				/*else static if( Type.IsArray )
+				{
+					alias SliceType = Slice!( ArrayValueType!( Type.Type ) );
+					pragma( msg, Type.Name ~ " is array, becomes " ~ SliceType.stringof );
+					return TypeIdentifier!( TypeDescriptor!SliceType, false );
+				}*/
 				else static if( Type.IsConst || Type.IsImmutable )
 				{
 					return TypeIdentifier!( TypeDescriptor!( Unqualified!( Type.Type ), false ) );
@@ -204,6 +230,7 @@ template CPPMangler( alias Func ) if( IsTemplatedType!Func && IsBaseTemplate!( F
 				}
 				else static if( is( Type == string ) )
 				{
+					//return Mangle!( const(char)[], bCollapse );
 					return Mangle!( const(char)*, bCollapse );
 				}
 				else static if( Type.IsUserType )
