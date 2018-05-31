@@ -645,7 +645,7 @@ template AliasSeq( A... )
 //----------------------------------------------------------------------------
 
 // TestTemplate must be instantiable, take one parameter, and alias to a boolean enum.
-template ExtractTupleOf( alias TestTemplate, Symbols... ) if( __traits( compiles, "TestTemplate!Symbols[ 0 ]" ) )
+template Filter( alias TestTemplate, Symbols... ) if( __traits( compiles, "TestTemplate!Symbols[ 0 ]" ) )
 {
 	string generate()
 	{
@@ -660,7 +660,7 @@ template ExtractTupleOf( alias TestTemplate, Symbols... ) if( __traits( compiles
 			}
 		}
 
-		return "alias ExtractTupleOf = binderoo.traits.AliasSeq!( " ~ passedSymbols.joinWith( ", " ) ~ " );";
+		return "alias Filter = binderoo.traits.AliasSeq!( " ~ passedSymbols.joinWith( ", " ) ~ " );";
 	}
 
 	mixin( generate() );
@@ -688,8 +688,12 @@ template ModuleFromName( string strModuleName )
 }
 //----------------------------------------------------------------------------
 
-template AliasFromName( string strName )
+template AliasFromName( string strName, string strModuleName = "" )
 {
+	static if( strModuleName.length )
+	{
+		mixin( "import " ~ strModuleName ~ ";" );
+	}
 	mixin( "alias AliasFromName = binderoo.traits.Alias!( " ~ strName ~ ");" );
 }
 //----------------------------------------------------------------------------
