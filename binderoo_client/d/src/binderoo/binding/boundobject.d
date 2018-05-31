@@ -45,7 +45,9 @@ alias BoundObjectDeallocator	= extern( C ) void function( void* pObject );
 alias BoundObjectThunk			= extern( C ) void* function( void* );
 alias BoundObjectSerialise		= extern( C ) const( char )* function( void* );
 alias BoundObjectDeserialise	= extern( C ) void function( void*, const( char )* );
-alias BoundObjectGenerateCSharp	= string[] function();
+alias BoundObjectQueryStringArr	= string[] function();
+alias BoundObjectQueryBool		= bool function();
+alias BoundObjectQueryString	= string function();
 
 @CTypeName( "binderoo::BoundObject", "binderoo/boundobject.h" )
 struct BoundObject
@@ -69,8 +71,10 @@ struct BoundObject
 
 	Type						eType = Type.Undefined;
 
-	BoundObjectGenerateCSharp	generateCSharpVariables;
-	BoundObjectGenerateCSharp	generateCSharpTypeDecl;
+	BoundObjectQueryStringArr	generateCSharpVariables;
+	BoundObjectQueryStringArr	generateCSharpTypeDecl;
+	BoundObjectQueryBool		hasBaseType;
+	BoundObjectQueryString		getBaseTypeNameCSharp;
 }
 //----------------------------------------------------------------------------
 
@@ -80,12 +84,21 @@ struct BoundObjectFunctions( Type )
 	{
 		enum TypeVal = BoundObject.Type.Value;
 		enum TypeSize = Type.sizeof;
+		alias BaseType = void;
 		alias CastType = Type*;
 	}
 	else
 	{
 		enum TypeVal = BoundObject.Type.Reference;
 		enum TypeSize = __traits( classInstanceSize, Type );
+		static if ( is( Type BT == super ) && !is( BT[ 0 ] == Object ) )
+		{
+			alias BaseType = BT;
+		}
+		else
+		{
+			alias BaseType = void;
+		}
 		alias CastType = Type;
 	}
 
@@ -245,7 +258,15 @@ struct BoundObjectFunctions( Type )
 		}
 		else static if( TypeVal == BoundObject.Type.Reference )
 		{
-			strOutput ~= "public class " ~ CSharpTypeString!Type ~ " : IDisposable";
+			static if( !is( BaseType == void ) )
+			{
+				enum Base = CSharpFullTypeString!( BaseType );
+			}
+			else
+			{
+				enum Base = "IDisposable";
+			}
+			strOutput ~= "public class " ~ CSharpTypeString!Type ~ " : " ~ Base;
 		}
 		return strOutput;
 	}
@@ -264,38 +285,56 @@ struct BoundObjectFunctions( Type )
 		{
 			static if( is( Type == struct ) )
 			{
-				strVariables ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
-								~ "private "
-								~ CSharpFullTypeString!( typeof( var ), MarshallingStage.Marshalled )
-								~ " "
-								~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
-								//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
-								~ ";";
-
-				static if( IsExternallyAccessible!var )
+				static if( IsStaticArray!( typeof( var ) ) )
 				{
-					strProperties ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
-					strProperties ~= "\t{";
-					static if( is( typeof( var ) == string ) )
+					strVariables ~= "\t//Ridiculous fixed array preservation code for " ~ __traits( identifier, var ) ~ " of length " ~ StaticArrayLength!( typeof( var ) ).to!string;
+					static foreach( iIndex; 0 .. StaticArrayLength!( typeof( var ) ) )
 					{
-						strProperties ~= "\t\tget { return new SliceString( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
-						static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";
+						strVariables ~=	"\t[ FieldOffset( " ~ ( var.offsetof + iIndex * ArrayValueType!( typeof( var ) ).sizeof ).to!string ~ " ) ] "
+										~ "private "
+										~ CSharpFullTypeString!( ArrayValueType!( typeof( var ) ), MarshallingStage.Unmarshalled )
+										~ " "
+										~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
+										//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
+										~ "_elem" ~ iIndex.to!string
+										~ ";";
 					}
-					else static if( IsNonAssociativeArray!( typeof( var ) ) )
+				}
+				else
+				{
+					strVariables ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
+									~ "private "
+									~ CSharpFullTypeString!( typeof( var ), MarshallingStage.Marshalled )
+									~ " "
+									~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
+									//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
+									~ ";";
+
+					static if( IsExternallyAccessible!var )
 					{
-						strProperties ~= "\t\tget { return new Slice< " ~ CSharpFullTypeString!( typeof( var ) ) ~ " >( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
-						static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";
-					}
-					else
-					{
-						strProperties ~= "\t\tget { return var_" ~ __traits( identifier, var ) ~ "; }";
-						static if( IsMutable!( typeof( var ) ) )
+						strProperties ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
+						strProperties ~= "\t{";
+						static if( is( typeof( var ) == string ) )
 						{
-							strProperties ~= "\t\tset { var_" ~ __traits( identifier, var ) ~ " = value; }";
+							strProperties ~= "\t\tget { return new SliceString( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
+							static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";
 						}
+						else static if( IsNonAssociativeArray!( typeof( var ) ) )
+						{
+							strProperties ~= "\t\tget { return new Slice< " ~ CSharpFullTypeString!( typeof( var ) ) ~ " >( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
+							static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";
+						}
+						else
+						{
+							strProperties ~= "\t\tget { return var_" ~ __traits( identifier, var ) ~ "; }";
+							static if( IsMutable!( typeof( var ) ) )
+							{
+								strProperties ~= "\t\tset { var_" ~ __traits( identifier, var ) ~ " = value; }";
+							}
+						}
+						strProperties ~= "\t}";
+						strProperties ~= "";
 					}
-					strProperties ~= "\t}";
-					strProperties ~= "";
 				}
 			}
 			else static if( is( Type == class ) && PrivacyOf!var == PrivacyLevel.Public )
@@ -318,6 +357,16 @@ struct BoundObjectFunctions( Type )
 		}
 
 		return strProperties ~ strVariables;
+	}
+
+	bool hasBaseType()
+	{
+		return !is( BaseType == void );
+	}
+
+	string getBaseTypeNameCSharp()
+	{
+		return CSharpFullTypeString!( BaseType );
 	}
 }
 //----------------------------------------------------------------------------
