@@ -253,10 +253,9 @@ template ModuleTypeDescriptors( alias ParentClass, Aliases... )
 			static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
 			{
 				mixin( "alias Type = " ~ AliasString ~ ";" );
-				mixin( "import " ~ ModuleName!( Type ) ~ ";" );
-
 				static if( IsAggregateType!( Type ) && Alias == Type.stringof )
 				{
+					mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 					indices ~= AliasString;
 				}
 			}
@@ -288,15 +287,16 @@ template ModuleEnumDescriptors( alias ParentClass, Aliases... )
 			static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
 			{
 				mixin( "alias Type = " ~ AliasString ~ ";" );
-				mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 				static if( Symbol == Type.stringof )
 				{
 					static if( IsEnum!( Type ) && IsIntegral!( OriginalType!Type ) )
 					{
+						mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 						indices ~= AliasString;
 					}
 					else static if( IsAggregateType!Type )
 					{
+						mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 						indices ~= getEnums!( Type, __traits( allMembers, Type ) )();
 					}
 				}
