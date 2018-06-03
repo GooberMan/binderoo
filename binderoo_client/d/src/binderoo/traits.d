@@ -295,6 +295,12 @@ template IsPlainArray( A : T[], T )
 }
 //----------------------------------------------------------------------------
 
+template IsPlainArray( A : T[ L ], T, size_t L )
+{
+	enum IsPlainArray = false;
+}
+//----------------------------------------------------------------------------
+
 template IsStaticArray( T )
 {
 	enum IsStaticArray = false;
@@ -831,6 +837,12 @@ string FullTypeName( alias Symbol, alias StringProvider = DSymbolToStringProvide
 	{
 		return SymbolString;
 	}
+}
+//----------------------------------------------------------------------------
+
+string ModuleLocalTypeName( Symbol )() if( !IsUserType!Symbol )
+{
+	return Symbol.stringof;
 }
 //----------------------------------------------------------------------------
 
