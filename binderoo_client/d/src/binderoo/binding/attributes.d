@@ -145,6 +145,8 @@ struct BindBinaryMatch
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
+package:
+
 // Used internally. Avoid using yourself.
 struct BindRawImport
 {
