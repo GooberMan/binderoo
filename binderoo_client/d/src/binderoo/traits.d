@@ -36,34 +36,53 @@ private import std.traits;
 // Get the instance of an attribute bound to a symbol.
 template GetUDA( alias symbol, Attribute )
 {
-	template Impl( A... )
+	static ptrdiff_t FindIndex( Attributes... )()
 	{
-		static if( A.length == 0 )
+		ptrdiff_t iFoundIndex = -1;
+
+		foreach( iIndex, CurrAttr; Attributes )
 		{
-			alias void Impl;
-		}
-		else static if( is( A[ 0 ] ) )
-		{
-			static if( is( A[ 0 ] == Attribute ) )
+			static if( IsVariable!CurrAttr )
 			{
-				enum Attribute Impl = Attribute();
+				alias AttrTest = typeof( CurrAttr );
+			}
+			else static if( is( CurrAttr ) )
+			{
+				alias AttrTest = CurrAttr;
 			}
 			else
 			{
-				alias Impl!( A[1..$] ) Impl;
+				alias AttrTest = void;
+			}
+
+			static if( is( AttrTest == Attribute ) )
+			{
+				iFoundIndex = iIndex;
+				break;
 			}
 		}
-		else static if( is( typeof( A[ 0 ] ) == Attribute ) )
+
+		return iFoundIndex;
+	}
+
+	enum UDAIndex = FindIndex!( __traits( getAttributes, symbol ) );
+
+	static if( UDAIndex == -1 )
+	{
+		alias GetUDA = void;
+	}
+	else
+	{
+		alias FoundUDAs = binderoo.traits.AliasSeq!( __traits( getAttributes, symbol ) );
+		static if( IsVariable!( FoundUDAs[ UDAIndex ] ) )
 		{
-			enum Impl = A[ 0 ];
+			enum GetUDA = FoundUDAs[ UDAIndex ];
 		}
 		else
 		{
-			alias Impl!( A[ 1..$ ] ) Impl;
+			enum GetUDA = Attribute.init;
 		}
 	}
-
-	alias GetUDA = Impl!( __traits( getAttributes, symbol ) );
 }
 //----------------------------------------------------------------------------
 
@@ -109,6 +128,17 @@ template IsUserType( T )
 	{
 		enum IsUserType = is( T == struct ) || is( T == class ) || is( T == enum ) || is( T == interface ) || is( T == union );
 	}
+}
+//----------------------------------------------------------------------------
+
+template IsValue( alias Symbol )
+{
+	bool Test( alias S )()
+	{
+		return typeof( S ).init == S;
+	}
+
+	enum IsValue = __traits( compiles, Test!Symbol );
 }
 //----------------------------------------------------------------------------
 
