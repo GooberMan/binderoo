@@ -337,7 +337,7 @@ template ModuleTemplateInstances( alias Parent, Symbols... )
 		return output;
 	}
 
-	mixin( "alias ModuleEnumDescriptors = binderoo.traits.AliasSeq!( " ~ getTemplates().joinWith( ", " ) ~ " );" );
+	mixin( "alias ModuleTemplateInstances = binderoo.traits.AliasSeq!( " ~ getTemplates().joinWith( ", " ) ~ " );" );
 }
 //----------------------------------------------------------------------------
 
@@ -403,7 +403,8 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 					}
 				}+/
 				static if( ( is( Type == struct ) || is( Type == class ) )
-							&& !HasUDA!( Type, BindNoExportObject ) )
+							&& !HasUDA!( Type, BindNoExportObject )
+							&& !HasUDA!( Type, BindIgnore ) )
 				{
 					alias TheseFunctions = BoundObjectFunctions!( Type );
 					objects ~= BoundObject( DString( FullTypeName!( Type ) )
@@ -450,6 +451,7 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 BoundEnum[] generateEnumExports( alias Parent, ExportTypes... )()
 {
 	mixin( "import " ~ ModuleName!Parent ~ ";" );
+	//pragma( msg, "Looking for enums in " ~ ModuleName!Parent ~ " from symbols " ~ __traits( allMembers, Parent ).stringof );
 
 	BoundEnum[] gatherFor( Types... )()
 	{
@@ -679,6 +681,13 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 
 	BoundFunction[] functionGrabber( int IntroducedVersion, alias Scope, Symbols... )()
 	{
+		static if( HasUDA!( Scope, BindIgnore )
+					|| HasUDA!( Scope, BindNoExportObject ) )
+		{
+			pragma( msg, "Skipping functions for " ~ Scope.stringof ~ "..." );
+			return [];
+		}
+
 		//pragma( msg, "Processing " ~ Scope.stringof ~ " for exports" );
 
 		enum ExportAllFound = IntroducedVersion != BindExport.iIntroducedVersion.init;
@@ -688,8 +697,11 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 
 		void handleFunction( alias Descriptor )( int iIntroducedVersion )
 		{
-			//static assert( Descriptor.IsCPlusPlusFunction, FullTypeName!( CurrFuncSymbol ) ~ " can only be exported as extern( C++ ) for now." );
-			static if( Descriptor.IsImplementedInType )
+			static if( Descriptor.HasUDA!BindIgnore || Descriptor.IsOperator )
+			{
+				return;
+			}
+			else static if( Descriptor.IsImplementedInType )
 			{
 				void* pFunctionCDecl;
 				void* pFunctionCPPDecl;
@@ -734,6 +746,10 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 					{
 						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Constructor );
 					}
+					else static if( Descriptor.IsDestructor )
+					{
+						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Destructor );
+					}
 					else
 					{
 						enum FunctionKind = BoundFunction.FunctionKind.Method;
@@ -765,7 +781,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 												, BoundFunction.Resolution.Exported
 												, BoundFunction.CallingConvention.CPP
 												, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( Descriptor.ReturnType ) )
-												, BoundFunction.Flags.None
+												, Descriptor.IsOverride ? BoundFunction.Flags.IsOverride : BoundFunction.Flags.None
 												, &BoundFunctionFunctions!( Descriptor ).CPrototype
 												, &BoundFunctionFunctions!( Descriptor ).DPrototype
 												, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
@@ -1475,6 +1491,12 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;
 			lines ~= Blank;
+			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "( IntPtr pInstance )";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "\tpObj = new ImportedClass( pInstance, \"" ~ obj.strFullName ~ "\" );";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
 			lines ~= strObjTabs ~ "protected " ~ obj.strName ~ "( string strClass )";
 			lines ~= strObjTabs ~ "{";
 			lines ~= strObjTabs ~ "\tpObj = new ImportedClass( strClass );";
@@ -1499,14 +1521,14 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		}
 		else
 		{
-			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "() : " ~ obj.strInheritsFrom;
-			lines ~= strObjTabs ~ "\tsuper( \"" ~ obj.strFullName ~ "\" )";
+			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "()";
+			lines ~= strObjTabs ~ "\t: base( \"" ~ obj.strFullName ~ "\" )";
 			lines ~= strObjTabs ~ "{";
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;
 			lines ~= Blank;
 			lines ~= strObjTabs ~ "protected " ~ obj.strName ~ "( string strClass )";
-			lines ~= strObjTabs ~ "\tsuper( strClass )";
+			lines ~= strObjTabs ~ "\t: base( strClass )";
 			lines ~= strObjTabs ~ "{";
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;
@@ -1540,7 +1562,14 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 				break;
 
 			case Namespace:
-				lines ~= strObjTabs ~ "public static class " ~ obj.strName;
+				if( depth == 0)
+				{
+					lines ~= "namespace " ~ obj.strName;
+				}
+				else
+				{
+					lines ~= strObjTabs ~ "public static class " ~ obj.strName;
+				}
 				lines ~= strObjTabs ~ "{";
 				foreach( subObj; obj.subTypes.byValue )
 				{
@@ -1727,6 +1756,10 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 	foreach( ref currFunction; exportFunctions )
 	{
+		if( ( currFunction.eFunctionKind & ( BoundFunction.FunctionKind.Constructor | BoundFunction.FunctionKind.Destructor ) ) != BoundFunction.FunctionKind.Undefined )
+		{
+			continue;
+		}
 		string strFuncFullName = cast(string)currFunction.strFunctionName;
 		string[] strFuncSplitNames = strFuncFullName.split( '.' );
 

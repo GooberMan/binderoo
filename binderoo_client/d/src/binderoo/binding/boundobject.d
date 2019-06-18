@@ -321,7 +321,7 @@ struct BoundObjectFunctions( Type )
 						}
 						else static if( IsNonAssociativeArray!( typeof( var ) ) )
 						{
-							strProperties ~= "\t\tget { return new Slice< " ~ CSharpFullTypeString!( typeof( var ) ) ~ " >( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
+							strProperties ~= "\t\tget { return new Slice< " ~ CSharpFullTypeString!( ArrayValueType!( typeof( var ) ) ) ~ " >( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
 							static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";
 						}
 						else
@@ -339,21 +339,25 @@ struct BoundObjectFunctions( Type )
 			}
 			else static if( is( Type == class ) && PrivacyOf!var == PrivacyLevel.Public )
 			{
-				strProperties ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
-				strProperties ~= "\t{";
-				strProperties ~= "\t\tget { return binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Getter( pObj.Ptr ); }";
-				static if( IsMutable!( typeof( var ) ) )
 				{
-					strProperties ~= "\t\tset { binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Setter( pObj.Ptr, value ); }";
+					enum bool GenerateSliceWrapper = IsNonAssociativeArray!( typeof( var ) ) || is( typeof( var ) == string );
+
+					strProperties ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
+					strProperties ~= "\t{";
+					strProperties ~= "\t\tget { return " ~ ( GenerateSliceWrapper ? "new " ~ CSharpFullTypeString!( typeof( var ), MarshallingStage.Intermediary ) ~ "( " : "" ) ~ "binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Getter( pObj.Ptr )" ~ ( GenerateSliceWrapper ? " ).Data" : "" ) ~ "; }";
+					static if( IsMutable!( typeof( var ) ) )
+					{
+						strProperties ~= "\t\tset { binderoointernal.FP." ~ FullTypeName!( Type ).replace( ".", "_" ) ~ "_" ~ __traits( identifier, var ) ~ "_Setter( pObj.Ptr, " ~ ( GenerateSliceWrapper ? "new " ~ CSharpFullTypeString!( typeof( var ), MarshallingStage.Intermediary ) ~ "( value ).SliceData" : "value" ) ~ " ); }";
+					}
+					strProperties ~= "\t}";
+					strProperties ~= "";
 				}
-				strProperties ~= "\t}";
-				strProperties ~= "";
 			}
 		}
 		
-		static if( is( Type == class ) )
+		static if( is( Type == class ) && is( BaseType == void ) )
 		{
-			strVariables ~= "\tprivate ImportedClass pObj;";
+			strVariables ~= "\tprotected ImportedClass pObj;";
 		}
 
 		return strProperties ~ strVariables;

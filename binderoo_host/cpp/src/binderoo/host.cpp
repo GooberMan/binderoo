@@ -86,6 +86,190 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#define BINDEROOHOST_RAPIDITERATION 0
 #endif // SYSAPI check
 
+namespace troo
+{
+	enum class Stuff : short
+	{
+		Foo,
+		Bar
+	};
+}
+
+namespace lulz
+{
+	namespace lulz
+	{
+		namespace lulz
+		{
+			void BIND_DLL lulz()
+			{
+			}
+		}
+	}
+}
+
+struct BIND_DLL TestForKek
+{
+
+	int val;
+	bool aFunc() const { return val != 0; }
+};
+
+namespace dcalculator
+{
+	enum class TryHard : int
+	{
+		Try,
+		Hard
+	};
+
+	enum class HardTry : int
+	{
+		Hard,
+		Try
+	};
+
+	TryHard BIND_DLL doATryHardPointer( TryHard* p1, TryHard* p2, TryHard* p3, TryHard* p4, TryHard* p5, TryHard* p6, TryHard* p7, TryHard* p8 )
+	{
+		return TryHard::Hard;
+	}
+
+	TryHard BIND_DLL doATryHard( TryHard p1, TryHard p2, HardTry p3, int p4, float p5, HardTry p6, TryHard* p7, HardTry*& p8 )
+	{
+		return TryHard::Hard;
+	}
+
+	bool BIND_DLL ExampleFunction (int*a, int b, int c, int*d, bool e, bool f, bool*g)
+	{
+		return false;
+	}
+
+	namespace calcman
+	{
+		struct BIND_DLL Test
+		{
+		public: bool foo() { val = 4; return false; }
+		protected: void bar() { val = 3; }
+		public: bool neitherFooNorBar() const { return false; }
+		public: static bool neitherBarNorFoo() { return false; }
+			int val;
+		};
+	}
+
+	calcman::Test BIND_DLL doAnIntyIntThing( int foo, int bar, int kek, calcman::Test& testes, float floatFoo, float floatBar, float floatKek )
+	{
+		testes.val = (int)( floatBar * foo );
+		return testes;
+	}
+
+	struct BIND_DLL Kek
+	{
+		template< typename _Ty >
+		static bool BIND_DLL doAKek( _Ty* pThing )
+		{
+			return pThing->aFunc() ? bVal : false;
+		}
+
+		template< typename _Ty, typename _Ty2, typename _Ty3 >
+		bool BIND_DLL doANonStaticKek( _Ty pThing )
+		{
+			return pThing->aFunc() ? bVal : false;
+		}
+
+		static const bool bVal = false;
+	};
+
+	bool BIND_DLL doAKek()
+	{
+		TestForKek test;
+		return Kek::doAKek( &test );
+	}
+
+	void BIND_DLL *doAForceAKek()
+	{
+		typedef bool (* KekFunc)( TestForKek* );
+		KekFunc func = &Kek::doAKek< TestForKek >;
+
+		void** retFunc = reinterpret_cast<void**>(&func);
+
+		return *retFunc;
+	}
+
+	void BIND_DLL *doAForceANonStaticKek()
+	{
+		typedef bool (Kek::* KekFunc)( TestForKek* );
+		KekFunc func = &Kek::doANonStaticKek< TestForKek*, TestForKek*, TestForKek* >;
+
+		void** retFunc = reinterpret_cast<void**>(&func);
+
+		return *retFunc;
+	}
+}
+//------------------------------------------------------------------------
+
+
+namespace kek
+{
+	enum class Something : short
+	{
+		Foo,
+		Bar
+	};
+	//------------------------------------------------------------------------
+
+	troo::Stuff BIND_DLL doATrooStuffThing( int& foo )
+	{
+		return troo::Stuff::Foo;
+	}
+	//------------------------------------------------------------------------
+
+	const dcalculator::calcman::Test BIND_DLL doAGetATestAThingAMaThingyThing()
+	{
+		return dcalculator::calcman::Test();
+	}
+
+	Something BIND_DLL doASomethingThing( int**** foo )
+	{
+		return Something::Foo;
+	}
+	//------------------------------------------------------------------------
+
+	Something BIND_DLL doADifferentSomething( Something p1, Something p2, int p3, int p4, Something p5, Something& p6, Something*& p7 )
+	{
+		return Something::Bar;
+	}
+
+	bool BIND_DLL doAPointerRefThing( int*& foo )
+	{
+		return dcalculator::calcman::Test().foo();
+	}
+	//------------------------------------------------------------------------
+
+	bool BIND_DLL doADoublePointerThing( int** foo )
+	{
+		return false;
+	}
+	//------------------------------------------------------------------------
+
+	const char BIND_DLL *doAThing( int foo )
+	{
+		return nullptr;
+	}
+	//------------------------------------------------------------------------
+
+	bool BIND_DLL doAThing( int foo, float bar )
+	{
+		return false;
+	}
+	//------------------------------------------------------------------------
+
+	void BIND_DLL doNoThing( int foo, float bar )
+	{
+		//
+	}
+	//------------------------------------------------------------------------
+}
+
 //----------------------------------------------------------------------------
 
 template<>

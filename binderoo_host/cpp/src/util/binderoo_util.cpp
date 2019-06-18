@@ -98,6 +98,17 @@ static void* BIND_C_CALL test_realloc( void* pObj, size_t newObjSize, size_t ali
 }
 //----------------------------------------------------------------------------
 
+#define STR_IMPL( x ) #x
+#define STR( x ) STR_IMPL( x )
+
+#define TERMINAL_RESET "\x1b[0m"
+#define TERMINAL_RGB( r, g, b ) STR( r )";" STR( g ) ";" STR( B )
+#define TERMINAL_FOREGROUNDRGB( r, g, b ) "\x1b[38;2;" TERMINAL_RGB( r, g, b ) "m"
+#define TERMINAL_BACKGROUNDRGB( r, g, b ) "\x1b[48;2;" TERMINAL_RGB( r, g, b ) "m"
+#define TERMINAL_FOREGROUND256( col ) "\x1b[38;5;" STR( col ) "m"
+#define TERMINAL_BACKGROUND256( col ) "\x1b[48;5;" STR( col ) "m"
+#define TERMINAL_BOLDON "\x1b[1m"
+
 static void BIND_C_CALL log_info( const char* pMessage )
 {
 	fprintf( stdout, "%s\n", pMessage );
@@ -106,13 +117,15 @@ static void BIND_C_CALL log_info( const char* pMessage )
 
 static void BIND_C_CALL log_warning( const char* pMessage )
 {
-	fprintf( stdout, "WARNING: %s\n", pMessage );
+//	fprintf( stdout, TERMINAL_BOLDON TERMINAL_FOREGROUNDRGB( 255, 211, 0 ) "WARNING:" TERMINAL_RESET " %s\n", pMessage );
+	fprintf( stdout, TERMINAL_BOLDON TERMINAL_FOREGROUND256( 220 ) "WARNING:" TERMINAL_RESET " %s\n", pMessage );
 }
 //----------------------------------------------------------------------------
 
 static void BIND_C_CALL log_error( const char* pMessage )
 {
-	fprintf( stderr, "ERROR: %s\n", pMessage );
+//	fprintf( stderr, TERMINAL_BOLDON TERMINAL_FOREGROUNDRGB( 255, 255, 255 ) TERMINAL_BACKGROUNDRGB( 227, 66, 52 ) "ERROR:" TERMINAL_RESET " %s\n", pMessage );
+	fprintf( stderr, TERMINAL_BOLDON TERMINAL_FOREGROUND256( 15 ) TERMINAL_BACKGROUND256( 160 ) "ERROR:" TERMINAL_RESET " %s\n", pMessage );
 }
 //----------------------------------------------------------------------------
 

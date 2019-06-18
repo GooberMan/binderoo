@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //----------------------------------------------------------------------------
 
 #if DEBUG
-	#define SliceFinalizerDebug
+	//#define SliceFinalizerDebug
 #endif // DEBUG
 //----------------------------------------------------------------------------
 

@@ -112,6 +112,23 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 													;
 
 	enum					IsConstructor			= FunctionName == "__ctor";
+	enum					IsDestructor			= FunctionName == "__dtor" || FunctionName == "__xdtor";
+	enum					IsOperator				= FunctionName == "opUnary"
+													|| FunctionName == "opIndexUnary"
+													|| FunctionName == "opCast"
+													|| FunctionName == "opBinary"
+													|| FunctionName == "opBinaryRight"
+													|| FunctionName == "opEquals"
+													|| FunctionName == "opCmp"
+													|| FunctionName == "opCall"
+													|| FunctionName == "opAssign"
+													|| FunctionName == "opIndexAssign"
+													|| FunctionName == "opSlice"
+													|| FunctionName == "opOpAssign"
+													|| FunctionName == "opIndexOpAssign"
+													|| FunctionName == "opIndex"
+													|| FunctionName == "opDollar"
+													|| FunctionName == "opDispatch";
 	enum					IsFinal					= ( FunctionAttributes & FunctionAttribute.Final ) != FunctionAttribute.Invalid;
 	enum					IsVirtual				= ( FunctionAttributes & FunctionAttribute.Virtual ) != FunctionAttribute.Invalid;
 	enum					IsAbstract				= ( FunctionAttributes & FunctionAttribute.Abstract ) != FunctionAttribute.Invalid;
@@ -306,6 +323,23 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 													;
 
 	enum					IsConstructor			= FunctionName == "__ctor";
+	enum					IsDestructor			= FunctionName == "__dtor" || FunctionName == "__xdtor";
+	enum					IsOperator				= FunctionName == "opUnary"
+													|| FunctionName == "opIndexUnary"
+													|| FunctionName == "opCast"
+													|| FunctionName == "opBinary"
+													|| FunctionName == "opBinaryRight"
+													|| FunctionName == "opEquals"
+													|| FunctionName == "opCmp"
+													|| FunctionName == "opCall"
+													|| FunctionName == "opAssign"
+													|| FunctionName == "opIndexAssign"
+													|| FunctionName == "opSlice"
+													|| FunctionName == "opOpAssign"
+													|| FunctionName == "opIndexOpAssign"
+													|| FunctionName == "opIndex"
+													|| FunctionName == "opDollar"
+													|| FunctionName == "opDispatch";
 	enum					IsFinal					= ( FunctionAttributes & FunctionAttribute.Final ) != FunctionAttribute.Invalid;
 	enum					IsVirtual				= ( FunctionAttributes & FunctionAttribute.Virtual ) != FunctionAttribute.Invalid;
 	enum					IsAbstract				= ( FunctionAttributes & FunctionAttribute.Abstract ) != FunctionAttribute.Invalid;
@@ -677,6 +711,10 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 		static if( TypeDescriptor.IsConstructor )
 		{
 			enum DeclString = TypeDescriptor.ObjectDescriptor.Name;
+		}
+		else static if( TypeDescriptor.IsDestructor )
+		{
+			enum DeclString = "~" ~ TypeDescriptor.ObjectDescriptor.Name;
 		}
 		else
 		{

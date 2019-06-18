@@ -12,7 +12,14 @@
             "args": [
                 "-f",
                 "../binderooclienttest",
-                "-ec++A"
+                "-c",
+                "binderoo.binding.cheaderparsing.ParseAndGenerateBinderooCodeFromHeader",
+                "-p",
+                "/usr/lib/x86_64-linux-gnu/wx/include/gtk2-unicode-3.0,/usr/include/wx-3.0",
+                "-p",
+                "wx/defs.h",
+                "-p",
+                "_FILE_OFFSET_BITS=64,WXUSINGDLL,__WXGTK__"
             ],
             "cwd": "${workspaceRoot}",
             "sourceMap": {

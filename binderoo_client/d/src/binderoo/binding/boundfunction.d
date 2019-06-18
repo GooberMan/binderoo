@@ -53,7 +53,7 @@ struct BoundFunctionFunctions( Descriptor )
 
 	static string CSharpPrototype()
 	{
-		return ( Descriptor.IsVirtual ? "virtual " : "" ) ~ FunctionString!( Descriptor ).CSharpDecl;
+		return ( Descriptor.IsOverride ? "override " : Descriptor.IsVirtual ? "virtual " : "" ) ~ FunctionString!( Descriptor ).CSharpDecl;
 	}
 
 	static string CSharpMarshalledPrototype()
@@ -154,7 +154,7 @@ struct BoundFunctionFunctions( Descriptor )
 
 	static string CSharpMarshalledReturnType()
 	{
-		return TypeString!( Descriptor.ReturnType ).CSharpMarshalledDecl;
+		return ( Descriptor.ReturnsRef ? "ref " : "" ) ~ TypeString!( Descriptor.ReturnType ).CSharpMarshalledDecl;
 	}
 
 	static string[] CSharpParameterNamesWithQualifiers()
@@ -164,9 +164,13 @@ struct BoundFunctionFunctions( Descriptor )
 			string[] output;
 			static foreach( param; Descriptor.ParametersAsTuple )
 			{
-				static if( param.IsArray )
+				static if( is( param.Type == string ) )
 				{
-					output ~= "new Slice< " ~ CSharpTypeString!( ArrayValueType!( param.Type ), MarshallingStage.Intermediary ) ~ " >( " ~ param.Name ~ " ).SliceData";
+					output ~= "new SliceString( " ~ param.Name ~ " ).SliceData";
+				}
+				else static if( param.IsArray )
+				{
+					output ~= "new Slice< " ~ CSharpFullTypeString!( ArrayValueType!( param.Type ), MarshallingStage.Intermediary ) ~ " >( " ~ param.Name ~ " ).SliceData";
 				}
 				else
 				{
@@ -235,6 +239,7 @@ struct BoundFunction
 		None			= 0,
 		OwnerIsAbstract	= 0x1,
 		Const			= 0x2,
+		IsOverride		= 0x4
 	}
 
 	@CTypeName( "binderoo::BoundFunction::Hashes", "binderoo/boundfunction.h" )

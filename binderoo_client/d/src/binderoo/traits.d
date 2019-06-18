@@ -92,6 +92,66 @@ template HasUDA( alias symbol, Attribute )
 }
 //----------------------------------------------------------------------------
 
+template GetTemplatedUDA( alias Symbol, alias Template ) if( IsTemplate!Template )
+{
+	static ptrdiff_t FindIndex( Attributes... )()
+	{
+		ptrdiff_t iFoundIndex = -1;
+
+		foreach( iIndex, CurrAttr; Attributes )
+		{
+			static if( IsVariable!CurrAttr )
+			{
+				alias AttrTest = typeof( CurrAttr );
+			}
+			else static if( is( CurrAttr ) )
+			{
+				alias AttrTest = CurrAttr;
+			}
+			else
+			{
+				alias AttrTest = void;
+			}
+
+			static if( IsBaseTemplate!( Template, AttrTest ) )
+			{
+				iFoundIndex = iIndex;
+				break;
+			}
+		}
+
+		return iFoundIndex;
+	}
+
+	enum UDAIndex = FindIndex!( __traits( getAttributes, Symbol ) );
+
+	static if( UDAIndex == -1 )
+	{
+		alias GetTemplatedUDA = void;
+	}
+	else
+	{
+		alias FoundUDAs = binderoo.traits.AliasSeq!( __traits( getAttributes, Symbol ) );
+		static if( IsVariable!( FoundUDAs[ UDAIndex ] ) )
+		{
+			enum GetTemplatedUDA = FoundUDAs[ UDAIndex ];
+		}
+		else
+		{
+			enum GetTemplatedUDA = FoundUDAs[ UDAIndex ].init;
+		}
+	}
+}
+//----------------------------------------------------------------------------
+
+template HasTemplatedUDA( alias Symbol, alias Template ) if( IsTemplate!Template )
+{
+	alias TestSymbol = GetTemplatedUDA!( Symbol, Template );
+
+	enum HasTemplatedUDA = !is( TestSymbol == void );
+}
+//----------------------------------------------------------------------------
+
 // I don't know why, but the compiler didn't like using pointers in alias...
 template HasUDA( T : A*, Attribute, A )
 {
@@ -248,6 +308,32 @@ template IsSigned( T )
 					|| is( T == float )
 					|| is( T == double )
 					|| is( T == real );
+}
+//----------------------------------------------------------------------------
+
+template BaseType( Type ) if( is( Type == class ) )
+{
+	static if( is( Type Bases == super ) )
+	{
+		static foreach( CurrBase; Bases )
+		{
+			static if( is( CurrBase == class ) )
+			{
+				static if( !is( CurrBase == Object ) )
+				{
+					alias BaseType = CurrBase;
+				}
+				else
+				{
+					alias BaseType = void;
+				}
+			}
+		}
+	}
+	else
+	{
+		alias BaseType = void;
+	}
 }
 //----------------------------------------------------------------------------
 
@@ -649,6 +735,26 @@ template IsBaseTemplate( alias Base, alias Instantiated : U!( Params ), alias U,
 }
 //----------------------------------------------------------------------------
 
+template IsBaseTemplate( alias Base, Instantiated : U!( Params ), alias U, Params... )
+{
+	static if( __traits( compiles, Base!Params ) )
+	{
+		// HORRIBLE HACK THANKS TO TEMPLATES THAT ARE EXACTLY THE SAME NOT MATCHING
+		enum IsBaseTemplate = Instantiated.stringof == Base!( Params ).stringof;
+	}
+	else
+	{
+		enum IsBaseTemplate = false;
+	}
+}
+//----------------------------------------------------------------------------
+
+template IsBaseTemplate( alias Base, NonInstantiated )
+{
+	enum IsBaseTemplate = false;
+}
+//----------------------------------------------------------------------------
+
 template SupportsAppend( T : U[], U )
 {
 	enum SupportsAppend = true;
@@ -763,11 +869,17 @@ struct SymbolOverride
 
 struct DSymbolToStringProvider
 {
+	private import std.conv : to;
+
 	enum String( T ) = T.stringof;
 	enum String( alias T ) = T.stringof;
 	enum SymbolOverride OverrideString( T ) = { false, T.stringof };
 	enum TemplateOpen = "!(";
 	enum TemplateClose = ")";
+	enum ArrayOpen = "[";
+	enum ArrayClose = "]";
+	enum StaticArray( size_t Length ) = ArrayOpen ~ Length.to!string ~ ArrayClose;
+	enum DynamicArray = ArrayOpen ~ ArrayClose;
 	enum ConstOpen = "const( ";
 	enum ConstClose = " )";
 	enum NamespaceSeparator = ".";
@@ -776,11 +888,17 @@ struct DSymbolToStringProvider
 
 struct CSymbolToStringProvider
 {
+	private import std.conv : to;
+
 	enum String( T ) = T.stringof;
 	enum String( alias T ) = T.stringof;
 	enum SymbolOverride OverrideString( T ) = { false, T.stringof };
 	enum TemplateOpen = "<";
 	enum TemplateClose = ">";
+	enum StaticArray( size_t Length ) = ArrayOpen ~ Length.to!string ~ ArrayClose;
+	enum DynamicArray = ArrayOpen ~ ArrayClose;
+	enum ArrayOpen = "[";
+	enum ArrayClose = "]";
 	enum ConstOpen = "const ";
 	enum ConstClose = "";
 	enum NamespaceSeparator = "::";
@@ -798,11 +916,11 @@ string FullTypeName( Symbol, alias StringProvider = DSymbolToStringProvider )()
 		static if( IsStaticArray!Symbol )
 		{
 			import std.conv : to;
-			enum ArrayString = "[" ~ StaticArrayLength!Symbol.to!string ~ "]";
+			enum ArrayString = StringProvider.StaticArray!( StaticArrayLength!Symbol );
 		}
 		else
 		{
-			enum ArrayString = "[]";
+			enum ArrayString = StringProvider.DynamicArray;
 		}
 		return FullTypeName!( ArrayValueType!Symbol, StringProvider ) ~ ArrayString;
 	}
@@ -873,6 +991,29 @@ string FullTypeName( alias Symbol, alias StringProvider = DSymbolToStringProvide
 string ModuleLocalTypeName( Symbol )() if( !IsUserType!Symbol )
 {
 	return Symbol.stringof;
+}
+//----------------------------------------------------------------------------
+
+string ModuleLocalTypeName( Symbol : ET[], ET )()
+{
+	static if( is( Symbol == string ) )
+	{
+		return "string";
+	}
+	else
+	{
+		static if( IsStaticArray!Symbol )
+		{
+			import std.conv : to;
+			enum ArrayString = "[" ~ StaticArrayLength!Symbol.to!string ~ "]";
+		}
+		else
+		{
+			enum ArrayString = "[]";
+		}
+
+		return ModuleLocalTypeName!ET ~ ArrayString;
+	}
 }
 //----------------------------------------------------------------------------
 

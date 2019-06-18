@@ -31,7 +31,7 @@ module binderoo_client;
 
 // D Runtime can't deal with pointer types being non-cyclic, so we ignore cyclic
 // dependencies.
-extern(C) __gshared string[] rt_options = [ "oncycle=ignore" ];
+//extern(C) __gshared string[] rt_options = [ "oncycle=ignore" ];
 
 version( Windows )
 {

@@ -118,7 +118,7 @@ struct TypeDescriptor( T, bool bIsRef = false )
 		alias 		ArrayValueType					= TypeDescriptor!( binderoo.traits.ArrayValueType!( T ) );
 		alias		ArrayKeyType					= TypeDescriptor!( binderoo.traits.ArrayKeyType!( T ) );
 	}
-	else static if( binderoo.traits.IsPlainArray!( T ) )
+	else static if( binderoo.traits.IsPlainArray!( T ) || binderoo.traits.IsStaticArray!( T ) )
 	{
 		// The key type is aliased to void here as we don't actually have a key type.
 		enum		IsSomeArray						= true;
@@ -376,6 +376,10 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 		enum String( alias T ) = CSharpTypeString!( T, stage );
 		enum SymbolOverride OverrideString( T ) = { false, T.stringof };
 		enum SymbolOverride OverrideString( T : string ) = { true, stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "SliceString" : "string" };
+		enum ArrayOpen = "[";
+		enum ArrayClose = "]";
+		enum StaticArray( size_t Length ) = ArrayOpen ~ ArrayClose;
+		enum DynamicArray = ArrayOpen ~ ArrayClose;
 		enum TemplateOpen = "<";
 		enum TemplateClose = ">";
 		enum ConstOpen = "";
@@ -384,7 +388,11 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 	}
 	//------------------------------------------------------------------------
 
-	static if( IsPointer!T && IsUserType!( T ) )
+	static if( IsNonAssociativeArray!T && stage != MarshallingStage.Unmarshalled )
+	{
+		enum CSharpFullTypeString = stage == MarshallingStage.Marshalled ? "SliceData" : ( is( T == string ) ? "SliceString" : "Slice< " ~ CSharpFullTypeString!( ArrayValueType!T ) ~ " >" );
+	}
+	else static if( IsPointer!T && IsUserType!( T ) )
 	{
 		enum CSharpFullTypeString = "ref " ~ CSharpFullTypeString!( binderoo.traits.PointerTarget!T, stage );
 	}
@@ -428,7 +436,8 @@ struct TypeString( T, bool bIsRef = false )
 		static if( ( IsConst!( T ) || IsImmutable!( T ) )
 					&& bIsRef )
 		{
-			return "in " ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqualified!( T ), stage ) );
+			//return "in " ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqualified!( T ), stage ) );
+			return "ref " ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqualified!( T ), stage ) );
 		}
 		else
 		{
