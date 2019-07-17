@@ -607,6 +607,12 @@ template Unqualified( T )
 }
 //----------------------------------------------------------------------------
 
+template ParentOf( alias T )
+{
+	alias ParentOf = Alias!( __traits( parent, T ) );
+}
+//----------------------------------------------------------------------------
+
 template IsTemplate( alias T )
 {
 	enum IsTemplate = __traits( isTemplate, T );
