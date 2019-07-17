@@ -1,7 +1,7 @@
 /*
 Binderoo
 Copyright (c) 2016-2017, Remedy Entertainment
-Copyright (c) 2018-2019, Remedy Entertainment
+Copyright (c) 2018-2019, Ethan Watson
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -180,7 +180,14 @@ struct BindBinaryMatch
 
 template BindingName( Type )
 {
-	import binderoo.traits : IsTemplatedType, TemplateParamsOf, HasUDA, GetUDA, FullTypeName;
+	import binderoo.traits	: IsTemplatedType
+							, TemplateOf
+							, TemplateParamsOf
+							, HasUDA
+							, GetUDA
+							, ParentOf
+							, FullTypeName
+							, ModuleName;
 	static if( IsTemplatedType!Type )
 	{
 		enum InstanceInfo = GetUDA!( Type, BindInstancesOf );
@@ -211,7 +218,7 @@ template BindingName( Type )
 			}
 			else
 			{
-				output = ModuleName!Parent ~ ".";
+				output = ModuleName!( ParentOf!( TemplateOf!Type ) ) ~ ".";
 				static if( InstanceInfo.UseName == InstanceInfo.UseName.AttributeName )
 				{
 					output ~= GetUDA!( Type, BindInstanceName ).Name;
