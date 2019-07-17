@@ -79,6 +79,9 @@ struct TypeDescriptor( T, bool bIsRef = false )
 
 	enum			FullyQualifiedName				= binderoo.traits.FullTypeName!( T );
 
+	enum			BindingName						= binderoo.binding.attributes.BindingName!T;
+	enum			BindingFullName					= binderoo.binding.attributes.BindingFullName!T;
+
 	alias			UnqualifiedType					= Unqualified!( T );
 
 	static if( binderoo.traits.IsUserType!( UnqualifiedType ) )

@@ -94,6 +94,7 @@ struct VariableDescriptor( alias Variable )
 
 	enum			ModuleName						= binderoo.traits.ModuleName!( T );
 	enum			FullyQualifiedName				= binderoo.traits.FullTypeName!( T ) ~ "." ~ ElementName;
+	enum			BindingFullName					= binderoo.binding.attributes.BindingFullName!T ~ "." ~ ElementName;
 	//------------------------------------------------------------------------
 
 	enum			IsStatic						= binderoo.traits.IsStaticMember!( T, Name );

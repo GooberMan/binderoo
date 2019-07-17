@@ -199,7 +199,7 @@ struct BindBinaryMatch
 }
 //----------------------------------------------------------------------------
 
-template BindingData( Type )
+template BindingData( alias Type )
 {
 	import binderoo.traits	: IsTemplatedType
 							, TemplateOf
@@ -208,83 +208,272 @@ template BindingData( Type )
 							, GetUDA
 							, ParentOf
 							, FullTypeName
-							, ModuleName;
-	static if( IsTemplatedType!Type )
+							, ModuleName
+							, IsNonAssociativeArray
+							, ArrayValueType
+							, IsConst
+							, IsImmutable
+							, IsInOut
+							, IsPointer
+							, PointerTarget
+							, Unqualified;
+	static if( IsPointer!Type )
 	{
-		enum InstanceInfo = GetUDA!( Type, BindInstancesOf );
-		alias InstanceParams = TemplateParamsOf!( Type );
-
-		static assert( !is( InstanceInfo == void ), "Instance " ~ FullTypeName!Type ~ " made it here without a @BindInstancesOf declaration" );
-
-		static if( HasUDA!( Type, BindInstanceParamLookup ) )
+		enum Name = BindingData!( PointerTarget!Type ).Name ~ "*";
+		enum Parent = BindingData!( PointerTarget!Type ).Parent;
+	}
+	else static if( IsConst!Type || IsImmutable!Type || IsInOut!Type )
+	{
+		enum Name = BindingData!( Unqualified!Type ).Name;
+		enum Parent = BindingData!( Unqualified!Type ).Parent;
+	}
+	else static if( IsNonAssociativeArray!Type )
+	{
+		enum Name = BindingData!( ArrayValueType!Type ).Name ~ "[]";
+		enum Parent = BindingData!( ArrayValueType!Type ).Parent;
+	}
+	else static if( IsTemplatedType!Type )
+	{
+		static if( HasUDA!( Type, BindInstancesOf ) )
 		{
-			enum ParamIndex = GetUDA!( Type, BindInstanceParamLookup ).ParamIndex;
-		}
-		else
-		{
-			import std.range : iota;
-			import std.array : array;
+			enum InstanceInfo = GetUDA!( Type, BindInstancesOf );
+			alias InstanceParams = TemplateParamsOf!( Type );
 
-			enum ParamIndex = iota( 0, InstanceParams.length ).array;
-		}
+			static assert( !is( InstanceInfo == void ), "Instance " ~ FullTypeName!Type ~ " made it here without a @BindInstancesOf declaration" );
 
-		static assert( ParamIndex.length > 0, "Binderoo can't deal with a template of zero parameters" );
-
-		string generateName()
-		{
-			string output;
-			static if( InstanceInfo.UseName == BindInstancesOf.UseName.TemplateName ) // TODO: Resolve to alias identifier
+			static if( HasUDA!( Type, BindInstanceParamLookup ) )
 			{
-				static assert( false, "BindingName doesn't support TemplateName yet" );
+				enum ParamIndex = GetUDA!( Type, BindInstanceParamLookup ).ParamIndex;
 			}
 			else
 			{
-				static if( InstanceInfo.UseName == BindInstancesOf.UseName.AttributeName )
-				{
-					output ~= GetUDA!( Type, BindInstanceName ).Name;
-				}
+				import std.range : iota;
+				import std.array : array;
+
+				enum ParamIndex = iota( 0, InstanceParams.length ).array;
 			}
 
-			static foreach( Index; ParamIndex )
+			static assert( ParamIndex.length > 0, "Binderoo can't deal with a template of zero parameters" );
+
+			string generateName()
 			{
-				static if( HasUDA!( InstanceParams[ Index ], BindInstanceName ) )
+				string output;
+				static if( InstanceInfo.UseName == BindInstancesOf.UseName.TemplateName ) // TODO: Resolve to alias identifier
 				{
-					output ~= GetUDA!( InstanceParams[ Index ], BindInstanceName ).Name;
+					static assert( false, "BindingName doesn't support TemplateName yet" );
 				}
 				else
 				{
-					output ~= InstanceParams[ Index ].stringof;
+					static if( InstanceInfo.UseName == BindInstancesOf.UseName.AttributeName )
+					{
+						output ~= GetUDA!( Type, BindInstanceName ).Name;
+					}
+				}
+
+				static foreach( Index; ParamIndex )
+				{
+					static if( HasUDA!( InstanceParams[ Index ], BindInstanceName ) )
+					{
+						output ~= GetUDA!( InstanceParams[ Index ], BindInstanceName ).Name;
+					}
+					else
+					{
+						output ~= InstanceParams[ Index ].stringof;
+					}
+				}
+
+				return output;
+			}
+
+			string generateModule()
+			{
+				static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.TemplateModule )
+				{
+					return ModuleName!( ParentOf!( TemplateOf!Type ) );
+				}
+				else static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.FirstParamModule )
+				{
+					return ModuleName!( InstanceParams[ 0 ] );
 				}
 			}
 
-			return output;
+			enum Name = generateName();
+			enum Parent = generateModule();
 		}
-
-		string generateModule()
+		else
 		{
-			static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.TemplateModule )
-			{
-				return ModuleName!( ParentOf!( TemplateOf!Type ) );
-			}
-			else static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.FirstParamModule )
-			{
-				return ModuleName!( InstanceParams[ 0 ] );
-			}
-		}
+			static assert( FullTypeName!Type.length != FullTypeName!( ParentOf!( TemplateOf!Type ) ).length, FullTypeName!Type ~ " fails at bind naming with parent" ~ FullTypeName!( ParentOf!( TemplateOf!Type ) ) );
 
-		enum Name = generateName();
-		enum Module = generateModule();
+			enum Name = FullTypeName!Type[ Parent.length + 1 .. $ ];
+			enum Parent = FullTypeName!( ParentOf!( TemplateOf!Type ) );
+		}
 	}
 	else
 	{
-		enum Module = ModuleName!Type;
-		enum Name = FullTypeName!Type[ Module.length + 1 .. $ ];
+		import std.traits : isSomeFunction;
+		static if( isSomeFunction!Type )
+		{
+			enum Name = __traits( identifier, Type );
+			enum Parent = BindingData!( ParentOf!Type ).Parent ~ "." ~ BindingData!( ParentOf!Type ).Name;
+		}
+		else
+		{
+			static if( __traits( compiles, { alias Parent = ParentOf!Type; } ) )
+			{
+				enum Name = FullTypeName!Type[ Parent.length + 1 .. $ ];
+				enum Parent = FullTypeName!( ParentOf!Type );
+			}
+			else
+			{
+				enum Name = FullTypeName!Type;
+				enum Parent = "";
+			}
+		}
 	}
 }
 //----------------------------------------------------------------------------
 
-enum BindingName( Type )		= BindingData!Type.Name;
-enum BindingFullName( Type )	= BindingData!Type.Module ~ "." ~ BindingData!Type.Name;
+template BindingData( Type ) // TODO: UPGRADE DMD AND KILL THIS THING
+{
+	import binderoo.traits	: IsTemplatedType
+							, TemplateOf
+							, TemplateParamsOf
+							, HasUDA
+							, GetUDA
+							, ParentOf
+							, FullTypeName
+							, ModuleName
+							, IsNonAssociativeArray
+							, ArrayValueType
+							, IsConst
+							, IsImmutable
+							, IsInOut
+							, IsPointer
+							, PointerTarget
+							, Unqualified;
+	static if( IsPointer!Type )
+	{
+		enum Name = BindingData!( PointerTarget!Type ).Name ~ "*";
+		enum Parent = BindingData!( PointerTarget!Type ).Parent;
+	}
+	else static if( IsConst!Type || IsImmutable!Type || IsInOut!Type )
+	{
+		enum Name = BindingData!( Unqualified!Type ).Name;
+		enum Parent = BindingData!( Unqualified!Type ).Parent;
+	}
+	else static if( IsNonAssociativeArray!Type )
+	{
+		enum Name = BindingData!( ArrayValueType!Type ).Name ~ "[]";
+		enum Parent = BindingData!( ArrayValueType!Type ).Parent;
+	}
+	else static if( IsTemplatedType!Type )
+	{
+		static if( HasUDA!( Type, BindInstancesOf ) )
+		{
+			enum InstanceInfo = GetUDA!( Type, BindInstancesOf );
+			alias InstanceParams = TemplateParamsOf!( Type );
+
+			static assert( !is( InstanceInfo == void ), "Instance " ~ FullTypeName!Type ~ " made it here without a @BindInstancesOf declaration" );
+
+			static if( HasUDA!( Type, BindInstanceParamLookup ) )
+			{
+				enum ParamIndex = GetUDA!( Type, BindInstanceParamLookup ).ParamIndex;
+			}
+			else
+			{
+				import std.range : iota;
+				import std.array : array;
+
+				enum ParamIndex = iota( 0, InstanceParams.length ).array;
+			}
+
+			static assert( ParamIndex.length > 0, "Binderoo can't deal with a template of zero parameters" );
+
+			string generateName()
+			{
+				string output;
+				static if( InstanceInfo.UseName == BindInstancesOf.UseName.TemplateName ) // TODO: Resolve to alias identifier
+				{
+					static assert( false, "BindingName doesn't support TemplateName yet" );
+				}
+				else
+				{
+					static if( InstanceInfo.UseName == BindInstancesOf.UseName.AttributeName )
+					{
+						output ~= GetUDA!( Type, BindInstanceName ).Name;
+					}
+				}
+
+				static foreach( Index; ParamIndex )
+				{
+					static if( HasUDA!( InstanceParams[ Index ], BindInstanceName ) )
+					{
+						output ~= GetUDA!( InstanceParams[ Index ], BindInstanceName ).Name;
+					}
+					else
+					{
+						output ~= InstanceParams[ Index ].stringof;
+					}
+				}
+
+				return output;
+			}
+
+			string generateModule()
+			{
+				static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.TemplateModule )
+				{
+					return ModuleName!( ParentOf!( TemplateOf!Type ) );
+				}
+				else static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.FirstParamModule )
+				{
+					return ModuleName!( InstanceParams[ 0 ] );
+				}
+			}
+
+			enum Name = generateName();
+			enum Parent = generateModule();
+		}
+		else
+		{
+			static assert( FullTypeName!Type.length != FullTypeName!( ParentOf!( TemplateOf!Type ) ).length, FullTypeName!Type ~ " fails at bind naming with parent" ~ FullTypeName!( ParentOf!( TemplateOf!Type ) ) );
+
+			enum Name = FullTypeName!Type[ Parent.length + 1 .. $ ];
+			enum Parent = FullTypeName!( ParentOf!( TemplateOf!Type ) );
+		}
+	}
+	else
+	{
+		import std.traits : isSomeFunction;
+		static if( isSomeFunction!Type )
+		{
+			enum Name = __traits( identifier, Type );
+			enum Parent = BindingData!( ParentOf!Type ).Parent ~ "." ~ BindingData!( ParentOf!Type ).Name;
+		}
+		else
+		{
+			static if( __traits( compiles, { alias Parent = ParentOf!Type; } ) )
+			{
+				enum Name = FullTypeName!Type[ Parent.length + 1 .. $ ];
+				enum Parent = FullTypeName!( ParentOf!Type );
+			}
+			else
+			{
+				enum Name = FullTypeName!Type;
+				enum Parent = "";
+			}
+		}
+	}
+}
+//----------------------------------------------------------------------------
+
+private import binderoo.traits : FullTypeName;
+
+enum BindingName( alias Type )		= BindingData!Type.Name;
+enum BindingName( Type )			= BindingData!Type.Name;
+
+enum BindingFullName( alias Type )	= BindingData!Type.Parent ~ "." ~ BindingData!Type.Name;
+enum BindingFullName( Type )		= BindingData!Type.Parent ~ ( BindingData!Type.Parent.length > 0 ? "." : "" ) ~ BindingData!Type.Name;
 //----------------------------------------------------------------------------
 
 package:

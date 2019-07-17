@@ -315,7 +315,7 @@ struct BoundObjectFunctions( Type )
 					{
 						strVariables ~=	"\t[ FieldOffset( " ~ ( var.offsetof + iIndex * ArrayValueType!( typeof( var ) ).sizeof ).to!string ~ " ) ] "
 										~ "private "
-										~ ( is( ArrayValueType!( typeof( var ) ) == class ) ? "IntPtr" : CSharpFullTypeString!( ArrayValueType!( typeof( var ) ), MarshallingStage.Unmarshalled ) )
+										~ ( is( ArrayValueType!( typeof( var ) ) == class ) ? "IntPtr" : CSharpFullTypeString!( ArrayValueType!( typeof( var ) ), MarshallingStage.Marshalled ) )
 										~ " "
 										~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
 										//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
@@ -327,7 +327,7 @@ struct BoundObjectFunctions( Type )
 				{
 					strVariables ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
 									~ "private "
-									~ ( is( typeof( var ) == class ) ? "IntPtr" : CSharpFullTypeString!( typeof( var ), MarshallingStage.Unmarshalled ) )
+									~ ( is( typeof( var ) == class ) ? "IntPtr" : CSharpFullTypeString!( typeof( var ), MarshallingStage.Marshalled ) )
 									~ " "
 									~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
 									//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
@@ -378,11 +378,6 @@ struct BoundObjectFunctions( Type )
 			}
 		}
 		
-		static if( is( Type == class ) && is( BaseType == void ) )
-		{
-			strVariables ~= "\tprotected ImportedClass pObj;";
-		}
-
 		return strProperties ~ strVariables;
 	}
 

@@ -179,6 +179,11 @@ template IsInOut( T )
 }
 //----------------------------------------------------------------------------
 
+enum IsConst( alias T ) = false;
+enum IsImmutable( alias T ) = false;
+enum IsInOut( alias T ) = false;
+//----------------------------------------------------------------------------
+
 template IsUserType( T )
 {
 	static if( IsPointer!T )
@@ -364,6 +369,12 @@ template IsPointer( T : T* )
 }
 //----------------------------------------------------------------------------
 
+template IsPointer( alias T )
+{
+	enum IsPointer = false;
+}
+//----------------------------------------------------------------------------
+
 template ArrayValueType( A : T[], T )
 {
 	alias ArrayValueType = T;
@@ -445,6 +456,12 @@ template StaticArrayLength( A : T[ L ], T, size_t L )
 template IsNonAssociativeArray( T )
 {
 	enum IsNonAssociativeArray = IsPlainArray!T || IsStaticArray!T;
+}
+//----------------------------------------------------------------------------
+
+template IsNonAssociativeArray( alias T )
+{
+	enum IsNonAssociativeArray = false;
 }
 //----------------------------------------------------------------------------
 
@@ -607,10 +624,12 @@ template Unqualified( T )
 }
 //----------------------------------------------------------------------------
 
-template ParentOf( alias T )
-{
-	alias ParentOf = Alias!( __traits( parent, T ) );
-}
+alias ParentOf( alias T )	= Alias!( __traits( parent, T ) );
+alias ParentOf( T )			= Alias!( __traits( parent, T ) );
+//----------------------------------------------------------------------------
+
+enum HasParent( alias T )	= __traits( compiles, ParentOf!T );
+enum HasParent( T )			= __traits( compiles, ParentOf!T );
 //----------------------------------------------------------------------------
 
 template IsTemplate( alias T )
@@ -1021,7 +1040,7 @@ string FullTypeName( alias Symbol, alias StringProvider = DSymbolToStringProvide
 
 	static if( isSomeFunction!Symbol )
 	{
-		enum SymbolString = FullTypeName!( __traits( parent, Symbol ), StringProvider ) ~ __traits( identifier, Symbol );
+		enum SymbolString = __traits( identifier, Symbol );
 	}
 	else static if( Symbol.stringof.startsWith( "module " ) )
 	{

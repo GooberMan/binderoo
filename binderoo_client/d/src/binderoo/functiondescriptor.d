@@ -112,8 +112,10 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 													| ( ( std.traits.functionAttributes!( symbol ) & std.traits.FunctionAttribute.ref_ )		? FunctionAttribute.ReturnsRef	: FunctionAttribute.Invalid )
 													;
 
-	enum					IsConstructor			= FunctionName == "__ctor";
-	enum					IsDestructor			= FunctionName == "__dtor" || FunctionName == "__xdtor";
+	enum					IsConstructor			= false;
+	enum					IsDestructor			= false;
+	enum					IsXDestructor			= false;
+	enum					IsUniqueXDestructor		= false;
 	enum					IsOperator				= FunctionName == "opUnary"
 													|| FunctionName == "opIndexUnary"
 													|| FunctionName == "opCast"
@@ -188,6 +190,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 
 	enum					ModuleName				= binderoo.traits.ModuleName!( symbol );
 	enum					FullyQualifiedName		= FullTypeName!( __traits( parent, symbol ) ) ~ "." ~ Name; //FullTypeName!( symbol );
+	enum					BindingFullName			= binderoo.binding.attributes.BindingFullName!symbol;
 	//------------------------------------------------------------------------
 
 	private alias			ReturnDescriptor		= TypeDescriptor!( std.traits.ReturnType!( symbol ), ReturnsRef );
@@ -325,6 +328,9 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 
 	enum					IsConstructor			= FunctionName == "__ctor";
 	enum					IsDestructor			= FunctionName == "__dtor" || FunctionName == "__xdtor";
+	enum					IsXDestructor			= FunctionName == "__xdtor";
+	// TODO: THIS DOESN'T WORK
+	enum					IsUniqueXDestructor		= false; //IsXDestructor && !is( AliasSeq!( __traits( getOverloads, T, "__dtor" ) ) == AliasSeq!( __traits( getOverloads, T, "__xdtor" ) ) );
 	enum					IsOperator				= FunctionName == "opUnary"
 													|| FunctionName == "opIndexUnary"
 													|| FunctionName == "opCast"
@@ -405,7 +411,10 @@ struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 	//------------------------------------------------------------------------
 
 	enum					ModuleName				= binderoo.traits.ModuleName!( T );
-	enum					FullyQualifiedName		= FullTypeName!( T ) ~ "." ~ Name; //FullTypeName!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
+	enum					FullyQualifiedName		= FullTypeName!( Symbol ); //FullTypeName!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] );
+
+	enum					BindingName				= binderoo.binding.attributes.BindingName!T;
+	enum					BindingFullName			= binderoo.binding.attributes.BindingFullName!Symbol;
 	//------------------------------------------------------------------------
 
 	private alias			ReturnDescriptor		= TypeDescriptor!( std.traits.ReturnType!( __traits( getOverloads, T, symbolName )[ iSymbolIndex ] ), ReturnsRef );
@@ -711,11 +720,11 @@ struct FunctionString( Desc ) if( IsFunctionDescriptor!( Desc )() )
 
 		static if( TypeDescriptor.IsConstructor )
 		{
-			enum DeclString = TypeDescriptor.ObjectDescriptor.Name;
+			enum DeclString = TypeDescriptor.ObjectDescriptor.BindingName;
 		}
 		else static if( TypeDescriptor.IsDestructor )
 		{
-			enum DeclString = "~" ~ TypeDescriptor.ObjectDescriptor.Name;
+			enum DeclString = "~" ~ TypeDescriptor.ObjectDescriptor.BindingName;
 		}
 		else
 		{

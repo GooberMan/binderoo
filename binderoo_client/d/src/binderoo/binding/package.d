@@ -386,6 +386,8 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 {
 	mixin( "import " ~ ModuleName!Parent ~ ";" );
 
+	pragma( msg, "Parsing " ~ FullTypeName!( Parent ) );
+
 	BoundObject[] gatherFor( bool bRecursive, Types... )()
 	{
 		BoundObject[] objects;
@@ -397,7 +399,8 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 			}
 			else
 			{
-				//pragma( msg, "Grabbing object " ~ Type.stringof );
+				pragma( msg, "Grabbing object " ~ BindingFullName!Type );
+
 				/+static if( is( Type == class ) )
 				{
 					foreach( m; __traits( allMembers, Type ) )
@@ -407,7 +410,7 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 				}+/
 				
 				enum FullName = BindingFullName!Type;
-				static if( IsTemplatedType!Type ) pragma( msg, FullTypeName!Type ~ " binding as " ~ FullName );
+				//static if( IsTemplatedType!Type ) pragma( msg, FullTypeName!Type ~ " binding as " ~ FullName );
 
 				static if( ( is( Type == struct ) || is( Type == class ) )
 							&& !HasUDA!( Type, BindNoExportObject )
@@ -443,13 +446,13 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 	static if( ObjectTypes.length == 0 )
 	{
 		alias ModuleTypes = ModuleTypeDescriptors!( Parent, __traits( allMembers, Parent ) );
-		alias ModuleTemplates = ModuleTemplateInstances!( Parent, __traits( allMembers, Parent ) );
+		//alias ModuleTemplates = ModuleTemplateInstances!( Parent, __traits( allMembers, Parent ) );
 		return gatherFor!( true, ModuleTypes )();
 	}
 	else
 	{
 		alias ModuleTypes = ModuleTypeDescriptors!( __traits( parent, ObjectTypes[ 0 ] ), ObjectTypes[ 0 ].stringof );
-		alias ModuleTemplates = ModuleTemplateInstances!( Parent, __traits( allMembers, Parent ) );
+		//alias ModuleTemplates = ModuleTemplateInstances!( Parent, __traits( allMembers, Parent ) );
 		return gatherFor!( false, ModuleTypes )();
 	}
 }
@@ -708,7 +711,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 			{
 				return;
 			}
-			else static if( Descriptor.IsImplementedInType )
+			else static if( Descriptor.IsImplementedInType && !Descriptor.IsXDestructor ) // TODO: FIX THIS DESTRUCTOR JUNK
 			{
 				void* pFunctionCDecl;
 				void* pFunctionCPPDecl;
@@ -732,7 +735,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 					pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
 				}
 
-				enum FullName		= Descriptor.FullyQualifiedName;
+				enum FullName		= Descriptor.BindingFullName;
 				enum Signature		= FunctionString!( Descriptor ).CSignature;
 				enum DDecl			= FunctionString!( Descriptor ).DDecl;
 				enum CDecl			= FunctionString!( Descriptor ).CDecl;
@@ -828,15 +831,15 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 			alias GetterDesc = FunctionDescriptor!( GeneratedFuncs.GetterCPPDecl );
 			alias SetterDesc = FunctionDescriptor!( GeneratedFuncs.SetterCPPDecl );
 
-			enum FullNameGetter = VariableDesc.FullyQualifiedName ~ "_Getter";
+			enum FullNameGetter = VariableDesc.BindingFullName ~ "_Getter";
 			enum SignatureGetter	= FunctionString!( GetterDesc ).CSignature;
 
-			enum FullNameSetter = VariableDesc.FullyQualifiedName ~ "_Setter";
+			enum FullNameSetter = VariableDesc.BindingFullName ~ "_Setter";
 			enum SignatureSetter	= FunctionString!( SetterDesc ).CSignature;
 
 			enum FunctionKind = cast(BoundFunction.FunctionKind)( BoundFunction.FunctionKind.CodeGenerated | BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property );
 
-			//pragma( msg, "Exporting " ~ VariableDesc.FullyQualifiedName ~ " Properties: " );
+			//pragma( msg, "Exporting " ~ VariableDesc.BindingFullName ~ " Properties: " );
 			//pragma( msg, " -> Getter: " ~ FullNameGetter ~ " => " ~ SignatureGetter );
 			//pragma( msg, " -> Setter: " ~ FullNameSetter ~ " => " ~ SignatureSetter );
 			//pragma( msg, " -> C# Getter Declaration: " ~ BoundFunctionFunctions!( GetterDesc ).CSharpPrototype() );
@@ -981,36 +984,46 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 						}
 					}
 				}
-				else static if( IsAggregate && !IsAlias!( Scope, SymbolName ) )
+				else static if( IsAggregate )
 				{
 					mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
 
-					static if( ExportAllFound )
+					static if( !IsAlias!( Scope, SymbolName )
+							|| IsTemplatedType!Symbol && HasUDA!( Symbol, BindInstancesOf ) )
 					{
-						enum UDA = BindExport( IntroducedVersion, -1 );
-					}
-					else
-					{
-						alias FoundUDA = GetUDA!( Symbol, BindExport );
+						//static if( IsTemplatedType!Symbol && HasUDA!( Symbol, BindInstancesOf ) ) pragma( msg, "Exporting functions for " ~ BindingFullName!Symbol );
 
-						static if( is( FoundUDA : void ) && Options.ExportUntagged )
+						static if( ExportAllFound )
 						{
-							enum UDA = BindExport( 1, -1 );
+							enum UDA = BindExport( IntroducedVersion, -1 );
 						}
 						else
 						{
-							alias UDA = FoundUDA;
+							alias FoundUDA = GetUDA!( Symbol, BindExport );
+
+							static if( is( FoundUDA : void ) && Options.ExportUntagged )
+							{
+								enum UDA = BindExport( 1, -1 );
+							}
+							else
+							{
+								alias UDA = FoundUDA;
+							}
+						}
+
+						static if( !is( UDA : void ) )
+						{
+							enum NewIntroducedVersion = UDA.iIntroducedVersion;
+							foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
+							static if( is( Symbol == class ) )
+							{
+								handleVariables!( Symbol )();
+							}
 						}
 					}
-
-					static if( !is( UDA : void ) )
+					else
 					{
-						enum NewIntroducedVersion = UDA.iIntroducedVersion;
-						foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
-						static if( is( Symbol == class ) )
-						{
-							handleVariables!( Symbol )();
-						}
+						//pragma( msg, "Not grabbing functions for " ~ SymbolName );
 					}
 				}
 			}
@@ -1621,11 +1634,22 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			lines ~= strObjTabs ~ "\t}";
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;
+			lines ~= Blank;
+			lines ~= strObjTabs ~ "// And here's where the real magic can be found";
+			lines ~= strObjTabs ~ "protected ImportedClass pObj;";
+			lines ~= strSeparator;
+			lines ~= Blank;
 		}
 		else
 		{
 			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "()";
 			lines ~= strObjTabs ~ "\t: base( \"" ~ obj.strFullName ~ "\" )";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
+			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "( IntPtr pInstance )";
+			lines ~= strObjTabs ~ "\t: base( pInstance )";
 			lines ~= strObjTabs ~ "{";
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;
