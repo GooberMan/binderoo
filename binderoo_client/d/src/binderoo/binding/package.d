@@ -406,7 +406,8 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 					}
 				}+/
 				
-				enum FullName = BindingName!Type;
+				enum FullName = BindingFullName!Type;
+				static if( IsTemplatedType!Type ) pragma( msg, FullTypeName!Type ~ " binding as " ~ FullName );
 
 				static if( ( is( Type == struct ) || is( Type == class ) )
 							&& !HasUDA!( Type, BindNoExportObject )
@@ -1072,12 +1073,17 @@ public void registerExportedObjects( BoundObject[] exports )
 		auto found = ( forExport.uFullyQualifiedNameHash in exportObjectIndices );
 		if( found !is null )
 		{
-			assert( found is null, "Hash collision with exported object! \"" ~ cast(string)forExport.strFullyQualifiedName ~ "\" <-> \"" ~ cast(string)exportObjects[ *found ].strFullyQualifiedName ~ "\"" );
+			assert( exportObjects[ *found ].Is!( BoundObject.Type.InstancedType )
+					&& forExport.Is!( BoundObject.Type.InstancedType )
+					&& cast( string )forExport.strFullyQualifiedName == cast( string )exportObjects[ *found ].strFullyQualifiedName
+						, "Hash collision with exported object! \"" ~ cast(string)forExport.strFullyQualifiedName ~ "\" <-> \"" ~ cast(string)exportObjects[ *found ].strFullyQualifiedName ~ "\"" );
 		}
-
-		size_t uIndex = exportObjects.length;
-		exportObjects ~= forExport;
-		exportObjectIndices[ forExport.uFullyQualifiedNameHash ] = uIndex;
+		else
+		{
+			size_t uIndex = exportObjects.length;
+			exportObjects ~= forExport;
+			exportObjectIndices[ forExport.uFullyQualifiedNameHash ] = uIndex;
+		}
 	}
 }
 //----------------------------------------------------------------------------
@@ -1884,7 +1890,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			strObjNameSplit = strObjNameSplit[ 1 .. $ ];
 		}
 
-		CSharpObject.Type eNewType = ( currExportedObj.eType == BoundObject.Type.Value ? CSharpObject.Type.Struct : CSharpObject.Type.Class );
+		CSharpObject.Type eNewType = ( currExportedObj.eType.Is!( BoundObject.Type.Value ) ? CSharpObject.Type.Struct : CSharpObject.Type.Class );
 		CSharpObject thisObj = new CSharpObject( eNewType, strObjNameSplit[ 0 ], strObjFullName, currObj );
 		currObj.subTypes[ thisObj.strName ] = thisObj;
 

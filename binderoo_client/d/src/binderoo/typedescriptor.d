@@ -354,6 +354,13 @@ template CSharpTypeString( T, MarshallingStage stage = MarshallingStage.Unmarsha
 		{
 			enum CSharpTypeString = GetUDA!( T, CSharpTypeName ).name;
 		}
+		else static if( IsTemplatedType!( T ) )
+		{
+			// TODO: Unclean hack
+			import binderoo.binding.attributes : BindingName;
+
+			enum CSharpTypeString = BindingName!( T );
+		}
 		else
 		{
 			enum CSharpTypeString = T.stringof;

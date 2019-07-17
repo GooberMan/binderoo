@@ -774,6 +774,9 @@ template PartialRight( alias Template, RightParams... ) if( IsTemplate!Template 
 }
 //----------------------------------------------------------------------------
 
+enum IsTypeMatch( T1, T2 ) = is( T1 == T2 );
+//----------------------------------------------------------------------------
+
 template CanInstantiateWith( alias Template, Params... )
 {
 	static if( __traits( isTemplate, Template ) )

@@ -97,10 +97,31 @@ struct BindInstancesOf
 	{
 		No,				// Not used at all
 		TemplateName,	// Name of the template
-		AttributeName	// BindInstanceName attribute on object
+		AttributeName,	// BindInstanceName attribute on object
 	}
 
-	ShouldUseName UseName = ShouldUseName.AttributeName;
+	enum InstantiateIn
+	{
+		TemplateModule,
+		FirstParamModule,
+	}
+
+	this( Params... )( Params params ) if( Params.length > 0 )
+	{
+		import binderoo.traits : PartialRight, IsTypeMatch;
+
+		alias IsShouldUseName = PartialRight!( IsTypeMatch, ShouldUseName );
+		alias IsInstantiateIn = PartialRight!( IsTypeMatch, InstantiateIn );
+
+		static foreach( iIndex, Type; Params )
+		{
+			static if( IsShouldUseName!Type ) UseName = params[ iIndex ];
+			static if( IsInstantiateIn!Type ) Instantiate = params[ iIndex ];
+		}
+	}
+
+	ShouldUseName	UseName			= ShouldUseName.AttributeName;
+	InstantiateIn	Instantiate		= InstantiateIn.TemplateModule;
 }
 //----------------------------------------------------------------------------
 
@@ -178,7 +199,7 @@ struct BindBinaryMatch
 }
 //----------------------------------------------------------------------------
 
-template BindingName( Type )
+template BindingData( Type )
 {
 	import binderoo.traits	: IsTemplatedType
 							, TemplateOf
@@ -212,14 +233,13 @@ template BindingName( Type )
 		string generateName()
 		{
 			string output;
-			static if( InstanceInfo.UseName == InstanceInfo.UseName.TemplateName ) // TODO: Resolve to alias identifier
+			static if( InstanceInfo.UseName == BindInstancesOf.UseName.TemplateName ) // TODO: Resolve to alias identifier
 			{
-				output = FullTypeString!( TemplateOf!Type );
+				static assert( false, "BindingName doesn't support TemplateName yet" );
 			}
 			else
 			{
-				output = ModuleName!( ParentOf!( TemplateOf!Type ) ) ~ ".";
-				static if( InstanceInfo.UseName == InstanceInfo.UseName.AttributeName )
+				static if( InstanceInfo.UseName == BindInstancesOf.UseName.AttributeName )
 				{
 					output ~= GetUDA!( Type, BindInstanceName ).Name;
 				}
@@ -240,14 +260,31 @@ template BindingName( Type )
 			return output;
 		}
 
-		pragma( msg, FullTypeName!Type ~ " binding as " ~ generateName() );
-		enum BindingName = generateName();
+		string generateModule()
+		{
+			static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.TemplateModule )
+			{
+				return ModuleName!( ParentOf!( TemplateOf!Type ) );
+			}
+			else static if( InstanceInfo.Instantiate == BindInstancesOf.InstantiateIn.FirstParamModule )
+			{
+				return ModuleName!( InstanceParams[ 0 ] );
+			}
+		}
+
+		enum Name = generateName();
+		enum Module = generateModule();
 	}
 	else
 	{
-		enum BindingName = FullTypeName!Type;
+		enum Module = ModuleName!Type;
+		enum Name = FullTypeName!Type[ Module.length + 1 .. $ ];
 	}
 }
+//----------------------------------------------------------------------------
+
+enum BindingName( Type )		= BindingData!Type.Name;
+enum BindingFullName( Type )	= BindingData!Type.Module ~ "." ~ BindingData!Type.Name;
 //----------------------------------------------------------------------------
 
 package:

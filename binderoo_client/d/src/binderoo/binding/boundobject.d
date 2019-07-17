@@ -56,9 +56,11 @@ struct BoundObject
 	@CTypeName( "binderoo::BoundObject::Type", "binderoo/boundobject.h" )
 	enum Type : int
 	{
-		Undefined,
-		Value,
-		Reference,
+		Undefined		= 0b00000000,
+		Value			= 0b00000001,
+		Reference		= 0b00000010,
+
+		InstancedType	= 0b00000100,
 	}
 
 	DString						strFullyQualifiedName;
@@ -79,18 +81,38 @@ struct BoundObject
 }
 //----------------------------------------------------------------------------
 
+pragma( inline, true ) bool Is( BoundObject.Type Type )( BoundObject.Type val )
+{
+	return cast(int)( val & Type ) != 0;
+}
+//----------------------------------------------------------------------------
+
+pragma( inline, true ) bool Is( BoundObject.Type Type )( ref BoundObject obj )
+{
+	return obj.eType.Is!Type;
+}
+//----------------------------------------------------------------------------
+
+pragma( inline, true ) bool Is( BoundObject.Type Type )( BoundObject* obj )
+{
+	return obj !is null ? Is!Type( *obj ) : false;
+}
+//----------------------------------------------------------------------------
+
 struct BoundObjectFunctions( Type )
 {
+	enum Instanced = IsTemplatedType!Type ? BoundObject.Type.InstancedType : BoundObject.Type.Undefined;
+
 	static if( is( Type == struct ) )
 	{
-		enum TypeVal = BoundObject.Type.Value;
+		enum TypeVal = cast( BoundObject.Type )( BoundObject.Type.Value | Instanced );
 		enum TypeSize = Type.sizeof;
 		alias BaseType = void;
 		alias CastType = Type*;
 	}
 	else
 	{
-		enum TypeVal = BoundObject.Type.Reference;
+		enum TypeVal = cast( BoundObject.Type )( BoundObject.Type.Reference | Instanced );
 		enum TypeSize = __traits( classInstanceSize, Type );
 		static if ( is( Type BT == super ) && !is( BT[ 0 ] == Object ) )
 		{
@@ -252,12 +274,12 @@ struct BoundObjectFunctions( Type )
 		import binderoo.typedescriptor;
 
 		string[] strOutput;
-		static if( TypeVal == BoundObject.Type.Value )
+		static if( TypeVal.Is!( BoundObject.Type.Value ) )
 		{
 			strOutput ~= "[ StructLayout( LayoutKind.Explicit, Pack = " ~ Type.alignof.to!string ~ " ) ]";
 			strOutput ~= "public struct " ~ CSharpTypeString!Type;
 		}
-		else static if( TypeVal == BoundObject.Type.Reference )
+		else static if( TypeVal.Is!( BoundObject.Type.Reference ) )
 		{
 			static if( !is( BaseType == void ) )
 			{
@@ -293,7 +315,7 @@ struct BoundObjectFunctions( Type )
 					{
 						strVariables ~=	"\t[ FieldOffset( " ~ ( var.offsetof + iIndex * ArrayValueType!( typeof( var ) ).sizeof ).to!string ~ " ) ] "
 										~ "private "
-										~ CSharpFullTypeString!( ArrayValueType!( typeof( var ) ), MarshallingStage.Unmarshalled )
+										~ ( is( ArrayValueType!( typeof( var ) ) == class ) ? "IntPtr" : CSharpFullTypeString!( ArrayValueType!( typeof( var ) ), MarshallingStage.Unmarshalled ) )
 										~ " "
 										~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
 										//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
@@ -305,7 +327,7 @@ struct BoundObjectFunctions( Type )
 				{
 					strVariables ~=	"\t[ FieldOffset( " ~ var.offsetof.to!string ~ " ) ] "
 									~ "private "
-									~ CSharpFullTypeString!( typeof( var ), MarshallingStage.Marshalled )
+									~ ( is( typeof( var ) == class ) ? "IntPtr" : CSharpFullTypeString!( typeof( var ), MarshallingStage.Unmarshalled ) )
 									~ " "
 									~ ( HasUDA!( var, InheritanceBase ) ? "_baseobj" : "var_" ~ __traits( identifier, var ) )
 									//~ ( var.init != typeof( var ).init ? " = " ~ var.init.stringof : "" )
