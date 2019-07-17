@@ -1,6 +1,7 @@
 /*
 Binderoo
-Copyright (c) 2016, Remedy Entertainment
+Copyright (c) 2016-2017, Remedy Entertainment
+Copyright (c) 2018-2019, Remedy Entertainment
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,8 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module binderoo.binding.attributes;
 //----------------------------------------------------------------------------
 
-struct BindIgnore { }
-struct BindNoExportObject { }
+struct BindIgnore						{ }
+struct BindNoExportObject				{ }
 //----------------------------------------------------------------------------
 
 // Entire object or single variable not suitable for serialisation? Then
@@ -82,6 +83,39 @@ struct BindExcludeVersion
 	{
 		strVersions = versions;
 	}
+}
+//----------------------------------------------------------------------------
+
+struct BindUFCS
+{
+}
+//----------------------------------------------------------------------------
+
+struct BindInstancesOf
+{
+	enum ShouldUseName
+	{
+		No,				// Not used at all
+		TemplateName,	// Name of the template
+		AttributeName	// BindInstanceName attribute on object
+	}
+
+	ShouldUseName UseName = ShouldUseName.AttributeName;
+}
+//----------------------------------------------------------------------------
+
+struct BindInstanceName
+{
+	string Name;
+}
+//----------------------------------------------------------------------------
+
+struct BindInstanceParamLookup
+{
+	int[] ParamIndex;
+
+	this( int[] params... ) { ParamIndex = params; }
+
 }
 //----------------------------------------------------------------------------
 
@@ -143,6 +177,70 @@ struct BindBinaryMatch
 {
 }
 //----------------------------------------------------------------------------
+
+template BindingName( Type )
+{
+	import binderoo.traits : IsTemplatedType, TemplateParamsOf, HasUDA, GetUDA, FullTypeName;
+	static if( IsTemplatedType!Type )
+	{
+		enum InstanceInfo = GetUDA!( Type, BindInstancesOf );
+		alias InstanceParams = TemplateParamsOf!( Type );
+
+		static assert( !is( InstanceInfo == void ), "Instance " ~ FullTypeName!Type ~ " made it here without a @BindInstancesOf declaration" );
+
+		static if( HasUDA!( Type, BindInstanceParamLookup ) )
+		{
+			enum ParamIndex = GetUDA!( Type, BindInstanceParamLookup ).ParamIndex;
+		}
+		else
+		{
+			import std.range : iota;
+			import std.array : array;
+
+			enum ParamIndex = iota( 0, InstanceParams.length ).array;
+		}
+
+		static assert( ParamIndex.length > 0, "Binderoo can't deal with a template of zero parameters" );
+
+		string generateName()
+		{
+			string output;
+			static if( InstanceInfo.UseName == InstanceInfo.UseName.TemplateName ) // TODO: Resolve to alias identifier
+			{
+				output = FullTypeString!( TemplateOf!Type );
+			}
+			else
+			{
+				output = ModuleName!Parent ~ ".";
+				static if( InstanceInfo.UseName == InstanceInfo.UseName.AttributeName )
+				{
+					output ~= GetUDA!( Type, BindInstanceName ).Name;
+				}
+			}
+
+			static foreach( Index; ParamIndex )
+			{
+				static if( HasUDA!( InstanceParams[ Index ], BindInstanceName ) )
+				{
+					output ~= GetUDA!( InstanceParams[ Index ], BindInstanceName ).Name;
+				}
+				else
+				{
+					output ~= InstanceParams[ Index ].stringof;
+				}
+			}
+
+			return output;
+		}
+
+		pragma( msg, FullTypeName!Type ~ " binding as " ~ generateName() );
+		enum BindingName = generateName();
+	}
+	else
+	{
+		enum BindingName = FullTypeName!Type;
+	}
+}
 //----------------------------------------------------------------------------
 
 package:

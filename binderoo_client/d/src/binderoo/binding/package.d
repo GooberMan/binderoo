@@ -240,10 +240,11 @@ template ModuleTypeDescriptors( alias ParentClass, Aliases... )
 	import std.typetuple;
 	mixin( "import " ~ ModuleName!ParentClass ~ ";" );
 
-	string makeATuple()
+	string makeATuple() // TODO: Resolve to alias identifier
 	{
 		import std.conv : to;
 		import binderoo.traits : IsAggregateType, IsSomeType, joinWith;
+		import binderoo.binding.attributes : BindInstancesOf;
 
 		string[] indices;
 		foreach( Alias; Aliases )
@@ -253,7 +254,8 @@ template ModuleTypeDescriptors( alias ParentClass, Aliases... )
 			static if( mixin( "__traits( compiles, " ~ AliasString ~ " ) && IsSomeType!( " ~ AliasString ~ " )" ) )
 			{
 				mixin( "alias Type = " ~ AliasString ~ ";" );
-				static if( IsAggregateType!( Type ) && Alias == Type.stringof )
+				static if( IsAggregateType!( Type )
+					&& ( Alias == Type.stringof || HasUDA!( Type, BindInstancesOf ) ) )
 				{
 					mixin( "import " ~ ModuleName!( Type ) ~ ";" );
 					indices ~= AliasString;
@@ -402,13 +404,16 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 						pragma( msg, m );
 					}
 				}+/
+				
+				enum FullName = BindingName!Type;
+
 				static if( ( is( Type == struct ) || is( Type == class ) )
 							&& !HasUDA!( Type, BindNoExportObject )
 							&& !HasUDA!( Type, BindIgnore ) )
 				{
 					alias TheseFunctions = BoundObjectFunctions!( Type );
-					objects ~= BoundObject( DString( FullTypeName!( Type ) )
-											, fnv1a_64( FullTypeName!( Type ) )
+					objects ~= BoundObject( DString( FullName )
+											, fnv1a_64( FullName )
 											, &TheseFunctions.allocObj
 											, &TheseFunctions.deallocObj
 											, &TheseFunctions.thunkObj
@@ -684,7 +689,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 		static if( HasUDA!( Scope, BindIgnore )
 					|| HasUDA!( Scope, BindNoExportObject ) )
 		{
-			pragma( msg, "Skipping functions for " ~ Scope.stringof ~ "..." );
+			//pragma( msg, "Skipping functions for " ~ Scope.stringof ~ "..." );
 			return [];
 		}
 
@@ -734,7 +739,23 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 
 				static if( Descriptor.IsStatic )
 				{
-					enum FunctionKind = BoundFunction.FunctionKind.Static;
+					static if( Descriptor.IsMemberFunction )
+					{
+						enum MethodFlag = BoundFunction.FunctionKind.Method;
+					}
+					else
+					{
+						enum MethodFlag = BoundFunction.FunctionKind.Undefined;
+					}
+
+					static if( Descriptor.IsProperty )
+					{
+						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property | MethodFlag );
+					}
+					else
+					{
+						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Static | MethodFlag );
+					}
 				}
 				else
 				{
@@ -884,6 +905,7 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 			{
 				static if( VariableDescriptor!( Type.tupleof[ iIndex ] ).PrivacyLevel == PrivacyLevel.Public )
 				{
+					pragma( msg, "Handling variable " ~ __traits( identifier, Type.tupleof[ iIndex ] ) );
 					handleVariable!( Type, iIndex );
 				}
 			}
@@ -1305,6 +1327,15 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		CSharpObject				parent;
 	}
 
+	struct PropertyFunc
+	{
+		string			Name;
+		BoundFunction*	Getter;
+		size_t			GetterIndex;
+		BoundFunction*	Setter;
+		size_t			SetterIndex;
+	}
+
 	enum Separator = "//----------------------------------------------------------------------------";
 	enum Blank = "";
 
@@ -1351,7 +1382,8 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 	string[] generateCSharpFunctionPointer( CSharpObject thisObj, BoundFunction* func, size_t iIndex, int depth )
 	{
-		bool bMemberFunc = !( func.eFunctionKind & BoundFunction.FunctionKind.Static );
+		bool bMemberFunc = cast(bool)( func.eFunctionKind & BoundFunction.FunctionKind.Method );
+		bool bStaticFunc = cast(bool)( func.eFunctionKind & BoundFunction.FunctionKind.Static );
 		string[] strParameterNames = func.CSharpParameterNamesWithQualifiers();
 
 		string strObjTabs = generateTabs( depth );
@@ -1371,7 +1403,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string[] strSplitApart = strMarshalledPrototype.split( '(' );
 
 		string strParameters = "(";
-		if( bMemberFunc )
+		if( bMemberFunc && !bStaticFunc )
 		{
 			if( thisObj.eType == CSharpObject.Type.Struct )
 			{
@@ -1403,27 +1435,52 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		return lines;
 	}
 
+	string generateCSharpFunctionCallForFunction( BoundFunction* func, size_t iIndex, string[] strParameterNames, bool bIgnoreReturn = false )
+	{
+		string strPropertyName = getPropertyName( func, iIndex );
+		string strReturnType = func.CSharpReturnType();
+
+		if( bIgnoreReturn || strReturnType == "void" || func.eFunctionKind & BoundFunction.FunctionKind.Constructor )
+		{
+			return "binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
+		}
+		else if( strReturnType == "string" )
+		{
+			return "return new SliceString( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
+		}
+		else if( func.eFunctionKind & BoundFunction.FunctionKind.ReturnsClass )
+		{
+			return "return new " ~ strReturnType ~ "( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) );";
+		}
+		else if( strReturnType.endsWith( "[]" ) )
+		{
+			return "return new Slice< " ~ strReturnType[ 0 .. $ - 2 ] ~ " >( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
+		}
+		else
+		{
+			return "return binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
+		}
+	}
+
 	string[] generateCSharpForFunction( CSharpObject thisObj, BoundFunction* func, size_t iIndex, int depth )
 	{
-		bool bMemberFunc = !( func.eFunctionKind & BoundFunction.FunctionKind.Static );
+		bool bMemberFunc = cast(bool)( func.eFunctionKind & BoundFunction.FunctionKind.Method );
+		bool bStaticFunc = cast(bool)( func.eFunctionKind & BoundFunction.FunctionKind.Static );
 		string[] strParameterNames = func.CSharpParameterNamesWithQualifiers();
+		ulong originalParamCount = strParameterNames.length;
 
 		string[] lines;
 
 		string strObjTabs = generateTabs( depth );
 		string strContentTabs = strObjTabs ~ '\t';
 
-		string strPropertyName = getPropertyName( func, iIndex );
-
 		string strPrototype = func.CSharpPrototype();
-		if( strPrototype.startsWith( "static " ) )
-		{
-			strPrototype = strPrototype[ 7 .. $ ];
-		}
+		//if( strPrototype.startsWith( "static " ) )
+		//{
+		//	strPrototype = strPrototype[ 7 .. $ ];
+		//}
 
-		string strReturnType = func.CSharpReturnType();
-
-		if( bMemberFunc )
+		if( bMemberFunc && !bStaticFunc )
 		{
 			if( thisObj.eType == CSharpObject.Type.Struct )
 			{
@@ -1435,37 +1492,76 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			}
 		}
 
-		lines ~= strObjTabs ~ "public " ~ func.CSharpPrototype();
+		bool isProperty = ( func.eFunctionKind & BoundFunction.FunctionKind.Property ) != 0;
+
+		enum strAccessibility = "public ";
+
+		lines ~= strObjTabs ~ strAccessibility ~ strPrototype;
 		lines ~= strObjTabs ~ "{";
-		if( func.eFunctionKind & BoundFunction.FunctionKind.Property )
+		if( isProperty )
+		{
+			lines ~= strContentTabs ~ "// TODO: THIS IS A PROPERTY";
+			lines ~= strContentTabs ~ "// " ~ cast(string)func.strFunctionName;
+		}
+
+		lines ~= strContentTabs ~ generateCSharpFunctionCallForFunction( func, iIndex, strParameterNames );
+
+		if( isProperty )
 		{
 			lines ~= strContentTabs ~ "// TODO: THIS IS A PROPERTY";
 		}
 
-		if( strReturnType == "void" || func.eFunctionKind & BoundFunction.FunctionKind.Constructor )
+		lines ~= strObjTabs ~ "}";
+		lines ~= strObjTabs ~ Separator[ 0 .. $ - depth * 4 ];
+		lines ~= Blank;
+		return lines;
+	}
+
+	string[] generateCSharpForProperty( CSharpObject thisObj, ref PropertyFunc property, int depth )
+	{
+		string[] strParameterNames;
+		if( thisObj.eType == CSharpObject.Type.Struct )
 		{
-			lines ~= strContentTabs ~ "binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
-		}
-		else if( strReturnType == "string" )
-		{
-			lines ~= strContentTabs ~ "return new SliceString( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
-		}
-		else if( func.eFunctionKind & BoundFunction.FunctionKind.ReturnsClass )
-		{
-			lines ~= strContentTabs ~ "return new " ~ strReturnType ~ "( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) );";
-		}
-		else if( strReturnType.endsWith( "[]" ) )
-		{
-			lines ~= strContentTabs ~ "return new Slice< " ~ strReturnType[ 0 .. $ - 2 ] ~ " >( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) ).Data;";
+			strParameterNames = [ "ref this" ];
 		}
 		else
 		{
-			lines ~= strContentTabs ~ "return binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " );";
+			strParameterNames = [ "pObj.Ptr" ];
 		}
 
-		if( func.eFunctionKind & BoundFunction.FunctionKind.Property )
+		string strPrototype;
+		if( property.Getter !is null )
 		{
-			lines ~= strContentTabs ~ "// TODO: THIS IS A PROPERTY";
+			strPrototype = property.Getter.CSharpPrototype();
+		}
+		else
+		{
+			strPrototype = property.Setter.CSharpPrototype();
+		}
+
+		import std.string : lastIndexOf;
+		ptrdiff_t FoundName = strPrototype.lastIndexOf( property.Name );
+		strPrototype = strPrototype[ 0 .. FoundName + property.Name.length ];
+
+		string[] lines;
+
+		string strObjTabs = generateTabs( depth );
+		string strContentTabs = strObjTabs ~ '\t';
+
+		enum strAccessibility = "public ";
+
+		lines ~= strObjTabs ~ strAccessibility ~ strPrototype;
+		lines ~= strObjTabs ~ "{";
+
+		if( property.Getter !is null )
+		{
+			lines ~= strContentTabs ~ "get { " ~ generateCSharpFunctionCallForFunction( property.Getter, property.GetterIndex, strParameterNames ) ~ " }";
+		}
+
+		if( property.Setter !is null )
+		{
+			strParameterNames ~= "value";
+			lines ~= strContentTabs ~ "set { " ~ generateCSharpFunctionCallForFunction( property.Setter, property.SetterIndex, strParameterNames, true ) ~ " }";
 		}
 
 		lines ~= strObjTabs ~ "}";
@@ -1629,15 +1725,60 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 				}
 				lines ~= strSeparatorTabs;
 				lines ~= Blank;
+
+				PropertyFunc[ string ] FoundProperties;
+				
+				lines ~= strObjTabs ~ "\t// Methods";
+				lines ~= strSeparatorTabs;
+				lines ~= Blank;
+
 				foreach( iIndex, func; obj.arrFunctions )
 				{
 					if( ( func.eFunctionKind & BoundFunction.FunctionKind.CodeGenerated ) == 0 )
 					{
-						lines ~= generateCSharpForFunction( obj, func, iIndex, depth + 1 );
+						bool isProperty = ( func.eFunctionKind & BoundFunction.FunctionKind.Property ) != 0;
+						if( isProperty )
+						{
+							string strName = cast(string)func.strFunctionName;
+							bool bGetter = func.ParameterNames().length == 0;
+							PropertyFunc* found = strName in FoundProperties;
+							if( found !is null )
+							{
+								bGetter ? found.Getter = func : found.Setter = func;
+								bGetter ? found.GetterIndex = iIndex : found.SetterIndex = iIndex;
+							}
+							else
+							{
+								import std.string : lastIndexOf;
+
+								PropertyFunc newProperty;
+								newProperty.Name = strName[ strName.lastIndexOf( '.' ) + 1 .. $ ];
+								bGetter ? newProperty.Getter = func : newProperty.Setter = func;
+								bGetter ? newProperty.GetterIndex = iIndex : newProperty.SetterIndex = iIndex;
+								FoundProperties[ strName ] = newProperty;
+							}
+						}
+						else
+						{
+							lines ~= generateCSharpForFunction( obj, func, iIndex, depth + 1 );
+						}
 					}
 				}
 				lines ~= strSeparatorTabs;
 				lines ~= Blank;
+
+				PropertyFunc[] AllProperties = FoundProperties.values;
+				if( AllProperties.length )
+				{
+					lines ~= strObjTabs ~ "\t// Properties";
+					lines ~= strSeparatorTabs;
+					lines ~= Blank;
+					foreach( ref Property; AllProperties )
+					{
+						lines ~= generateCSharpForProperty( obj, Property, depth + 1 );
+					}
+				}
+
 				foreach( strTok; obj.strVariables )
 				{
 					lines ~= strObjTabs ~ strTok;
@@ -1756,6 +1897,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 	foreach( ref currFunction; exportFunctions )
 	{
+		// TODO: Collect UFCS functions
 		if( ( currFunction.eFunctionKind & ( BoundFunction.FunctionKind.Constructor | BoundFunction.FunctionKind.Destructor ) ) != BoundFunction.FunctionKind.Undefined )
 		{
 			continue;

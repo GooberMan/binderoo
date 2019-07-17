@@ -133,7 +133,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 				{
 					static if( IsStaticArray!( Param.Type ) )
 					{
-						pragma( msg, "Static array encountered:" ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl );
+						//pragma( msg, "Static array encountered:" ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl );
 
 						strWrapperDeclarators ~= "import std.algorithm : copy; " ~ TypeString!( TypeDescriptor!( Unqualified!( Param.Type ) ) ).FullyQualifiedDDeclNoRef ~ " _arr_p" ~ iIndex.to!string ~ "; " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string ) ~ ".toSlice.copy( _arr_p" ~ iIndex.to!string ~ "[ 0 .. " ~ StaticArrayLength!( Param.Type ).to!string ~ " ] );";
 						strParameters ~= FullTypeName!( SliceOf!( Param.Type ) ) ~ " " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string );
@@ -141,6 +141,8 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 					}
 					else
 					{
+						//pragma( msg, "Dynamic array encountered:" ~ TypeString!( Param.Descriptor ).FullyQualifiedDDecl );
+
 						strWrapperDeclarators ~= TypeString!( Param.Descriptor ).FullyQualifiedDDeclNoRef ~ "* _arr_p" ~ iIndex.to!string ~ " = cast( " ~ TypeString!( Param.Descriptor ).FullyQualifiedDDeclNoRef ~ "*)&" ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string ) ~ ";";
 						strParameters ~= FullTypeName!( SliceOf!( Param.Type ) ) ~ " " ~ ( Param.Name.length ? Param.Name : "_unnamed_param_" ~ iIndex.to!string );
 						strParameterNames ~= "*_arr_p" ~ iIndex.to!string;
@@ -278,6 +280,7 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			}
 			strParameterNames ~= "pThisObj";
 
+			// TODO: This needs slice support
 			static if( AccessorType == "Setter" )
 			{
 				static if( Desc.ElementType.IsStruct )

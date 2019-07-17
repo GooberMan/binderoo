@@ -200,10 +200,13 @@ namespace binderoo
 			set
 			{
 				Dispose();
-				int dataSize = value.Length * Marshal.SizeOf( typeof( T ) );
-				IntPtr ptr = Marshal.AllocHGlobal( dataSize );
-				Util.Copy( ptr, value );
-				sliceWrapper.Set( ptr, (ulong)value.Length, true );
+				if( value.Length > 0 )
+				{
+					int dataSize = value.Length * Marshal.SizeOf( typeof( T ) );
+					IntPtr ptr = Marshal.AllocHGlobal( dataSize );
+					Util.Copy( ptr, value );
+					sliceWrapper.Set( ptr, (ulong)value.Length, true );
+				}
 			}
 		}
 

@@ -223,7 +223,7 @@ string GenerateBitPackBody( Descriptor, bool bHumanReadableNames )()
 		version( BitPackCompileTimeDebug ) strOutput ~= "// " ~ VariableName ~ " accessors\n";
 		version( BitPackCompileTimeDebug ) strOutput ~= "// -> Start bit: " ~ to!string( iThisVariableBitStart ) ~ ", total size: " ~ to!string( iBitsLeft ) ~ ", default: " ~ InitValue.to!string ~ "\n";
 
-		string strGetter = "final @property " ~ VariableTypeName ~ " " ~ VariableName ~ "() { " ~ StorageTypeName ~ " storage = 0; ";
+		string strGetter = "final @property " ~ VariableTypeName ~ " " ~ VariableName ~ "() const { " ~ StorageTypeName ~ " storage = 0; ";
 		string strSetter = "final @property " ~ VariableTypeName ~ " " ~ VariableName ~ "( " ~ VariableTypeName ~ " val ) in { import std.conv : to; assert( val >= 0, \"Negative values currently unsupported.\" ); assert( val < " ~ to!string( cast(StorageType)1 << PackSizeUDA.iPackSize ) ~ ", \"Value \" ~ to!string( val ) ~ \" is larger than " ~ VariableName ~ " can hold.\" ); } body { ";
 
 		while( iBitsLeft > 0 )

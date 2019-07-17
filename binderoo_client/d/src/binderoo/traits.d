@@ -1,6 +1,7 @@
 /*
 Binderoo
-Copyright (c) 2016, Remedy Entertainment
+Copyright (c) 2016-2017, Remedy Entertainment
+Copyright (c) 2018-2019, Ethan Watson
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -631,7 +632,7 @@ template IsTemplatedType( T )
 }
 //----------------------------------------------------------------------------
 
-template IsTemplatedType( T : U!( Params ), alias U, Params )
+template IsTemplatedType( T : U!( Params ), alias U, Params... )
 {
 	enum IsTemplatedType = true;
 }
@@ -643,7 +644,7 @@ template IsTemplatedType( alias T : U!( Params ), alias U, Params... )
 }
 //----------------------------------------------------------------------------
 
-template IsTemplatedType( T : U!( Params )[], alias U, Params )
+template IsTemplatedType( T : U!( Params )[], alias U, Params... )
 {
 	enum IsTemplatedType = true;
 }
@@ -755,6 +756,31 @@ template IsBaseTemplate( alias Base, NonInstantiated )
 }
 //----------------------------------------------------------------------------
 
+template PartialLeft( alias Template, LeftParams... ) if( IsTemplate!Template )
+{
+	alias PartialLeft( Params... ) = Template!( LeftParams, Params );
+}
+//----------------------------------------------------------------------------
+
+template PartialRight( alias Template, RightParams... ) if( IsTemplate!Template )
+{
+	alias PartialRight( Params... ) = Template!( Params, RightParams );
+}
+//----------------------------------------------------------------------------
+
+template CanInstantiateWith( alias Template, Params... )
+{
+	static if( __traits( isTemplate, Template ) )
+	{
+		enum CanInstantiateWith = __traits( compiles, { alias Instantiated = Template!Params; } );
+	}
+	else
+	{
+		enum CanInstantiateWith = false;
+	}
+}
+//----------------------------------------------------------------------------
+
 template SupportsAppend( T : U[], U )
 {
 	enum SupportsAppend = true;
@@ -771,6 +797,29 @@ template ZeroValue( T )
 	{
 		alias ZeroValue = T.init;
 	}
+}
+//----------------------------------------------------------------------------
+
+template DerivesFrom( CheckType, BaseType ) if( is( CheckType == class ) && is( BaseType == class ) )
+{
+	static if( is( CheckType == BaseType ) )
+	{
+		enum DerivesFrom = true;
+	}
+	else static if( is( CheckType SuperType == super ) && SuperType.length > 0 )
+	{
+		enum DerivesFrom = DerivesFrom!( SuperType[ 0 ], BaseType );
+	}
+	else
+	{
+		enum DerivesFrom = false;
+	}
+}
+//----------------------------------------------------------------------------
+
+template DerivesFrom( CheckType, BaseType ) if( !is( CheckType == class ) || !is( BaseType == class ) )
+{
+	enum DerivesFrom = false;
 }
 //----------------------------------------------------------------------------
 
@@ -928,7 +977,8 @@ string FullTypeName( Symbol, alias StringProvider = DSymbolToStringProvider )()
 	{
 		return StringProvider.ConstOpen ~ FullTypeName!( A, StringProvider ) ~ StringProvider.ConstClose;
 	}
-	else static if( IsTemplatedType!Symbol )
+	else static if( IsTemplatedType!Symbol
+				|| is( Symbol : TemplateType!( Args ), alias TemplateType, Args... ) )
 	{
 		string[] strTemplatedTypes;
 		static foreach( Param; TemplateParamsOf!Symbol )
@@ -1060,40 +1110,50 @@ string ModuleLocalTypeName( alias Symbol )()
 }
 //----------------------------------------------------------------------------
 
-string ModuleName( T )() if( IsTemplatedType!T )
+string ModuleName( T )() if( IsTemplatedType!T && !IsSomeArray!T )
 {
 	return ModuleName!( TemplateOf!T );
 }
 //----------------------------------------------------------------------------
 
-string ModuleName( T : PT*, PT )() if( IsTemplatedType!PT )
+string ModuleName( T )() if( is( T : PT*, PT ) && IsTemplatedType!PT && !IsSomeArray!PT )
 {
-	return ModuleName!( TemplateOf!PT );
+	static if( is( T : PT*, PT ) ) // WHAT IS THIS HACK
+	{
+		return ModuleName!( TemplateOf!PT );
+	}
 }
 //----------------------------------------------------------------------------
 
-string ModuleName( T : AT[], AT )()
+string ModuleName( T )() if( is( T : AT[], AT ) )
 {
-	static if( IsTemplatedType!AT )
+	static if( is( T : AT[], AT ) ) // WHAT IS THIS HACK
 	{
-		return ModuleName!( TemplateOf!AT );
-	}
-	else
-	{
-		return ModuleName!AT;
+		static if( IsTemplatedType!AT )
+		{
+			return ModuleName!( TemplateOf!AT );
+		}
+		else
+		{
+			return ModuleName!AT;
+		}
 	}
 }
 //----------------------------------------------------------------------------
 
 string ModuleName( alias Symbol )()
 {
-	static if( is( Symbol : KT[], KT ) )
+	static if( is( Symbol : TemplateType!( Args ), alias TemplateType, Args... ) )
 	{
-		return ModuleName!KT;
+		return ModuleName!( __traits( parent, TemplateType ) );
+	}
+	else static if( is( Symbol : KT[], KT ) )
+	{
+		return ModuleName!( KT );
 	}
 	else static if( is( Symbol : PT*, PT ) )
 	{
-		return ModuleName!PT;
+		return ModuleName!( PT );
 	}
 	else
 	{
