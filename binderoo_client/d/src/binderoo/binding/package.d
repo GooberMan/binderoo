@@ -386,7 +386,7 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 {
 	mixin( "import " ~ ModuleName!Parent ~ ";" );
 
-	pragma( msg, "Parsing " ~ FullTypeName!( Parent ) );
+	//pragma( msg, "Parsing " ~ FullTypeName!( Parent ) );
 
 	BoundObject[] gatherFor( bool bRecursive, Types... )()
 	{
@@ -399,7 +399,7 @@ BoundObject[] generateObjectExports( alias Parent, ObjectTypes... )()
 			}
 			else
 			{
-				pragma( msg, "Grabbing object " ~ BindingFullName!Type );
+				//pragma( msg, "Grabbing object " ~ BindingFullName!Type );
 
 				/+static if( is( Type == class ) )
 				{
