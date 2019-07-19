@@ -409,10 +409,17 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 	}
 	else
 	{
-		import std.algorithm : reverse, countUntil;
-		enum CSharpFullTypeString = FullTypeName!( T, CSharpSymbolToStringProvider );
+		// TODO: UNDO THIS HACK
+		static if( IsTemplatedType!T )
+		{
+			import binderoo.binding.attributes : BindingParentName;
+			enum CSharpFullTypeString = BindingParentName!T ~ "." ~ CSharpSymbolToStringProvider.String!T;
+		}
+		else
+		{
+			enum CSharpFullTypeString = FullTypeName!( T, CSharpSymbolToStringProvider );
+		}
 	}
-	//pragma( msg, "C#-ifying " ~ T.stringof ~ " at stage " ~ stage.stringof ~ " -> " ~ FullTypeName!T ~ " --> " ~ CSharpFullTypeString );
 }
 
 struct TypeString( T, bool bIsRef = false )

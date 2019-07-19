@@ -89,8 +89,6 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 			// WHY DO I HAVE TO KEEP DOING THIS...
 			enum MangleBase = "pragma( mangle, \"%s_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ).replace( "!", "_" ).replace( "(", "_" ).replace( ",", "_" ).replace( ")", "_" ) ~ Desc.OverloadIndex.to!string ~ "\" )\nexport extern( %s ) static ";
 
-			//pragma( msg, "MANGLE [c_wrapper_" ~ Desc.FullyQualifiedName.replace( ".", "_" ).replace( "!", "_" ).replace( "(", "_" ).replace( ",", "_" ).replace( ")", "_" ) ~ Desc.OverloadIndex.to!string ~ "]" );
-
 			enum ExportDeclC = MangleBase.format( "c", "C" );
 			enum ExportDeclCPP = MangleBase.format( "cpp", "C++" );
 

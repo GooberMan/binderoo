@@ -447,8 +447,25 @@ template BindingData( Type ) // TODO: UPGRADE DMD AND KILL THIS THING
 		import std.traits : isSomeFunction;
 		static if( isSomeFunction!Type )
 		{
-			enum Name = __traits( identifier, Type );
-			enum Parent = BindingData!( ParentOf!Type ).Parent ~ "." ~ BindingData!( ParentOf!Type ).Name;
+			static if( __traits( compiles, { enum Name = __traits( identifier, Type ); } ) )
+			{
+				enum Name = __traits( identifier, Type );
+				enum Parent = BindingData!( ParentOf!Type ).Parent ~ "." ~ BindingData!( ParentOf!Type ).Name;
+			}
+			else
+			{
+				static if( __traits( compiles, { alias ParentType = ParentOf!Type; } ) )
+				{
+					enum Name = FullTypeName!Type[ Parent.length + 1 .. $ ];
+					enum Parent = FullTypeName!( ParentOf!Type );
+				}
+				else
+				{
+					pragma( msg, "Weird type " ~ Name );
+					enum Name = FullTypeName!Type;
+					enum Parent = "";
+				}
+			}
 		}
 		else
 		{
@@ -469,11 +486,14 @@ template BindingData( Type ) // TODO: UPGRADE DMD AND KILL THIS THING
 
 private import binderoo.traits : FullTypeName;
 
-enum BindingName( alias Type )		= BindingData!Type.Name;
-enum BindingName( Type )			= BindingData!Type.Name;
+enum BindingName( alias Type )			= BindingData!Type.Name;
+enum BindingName( Type )				= BindingData!Type.Name;
 
-enum BindingFullName( alias Type )	= BindingData!Type.Parent ~ "." ~ BindingData!Type.Name;
-enum BindingFullName( Type )		= BindingData!Type.Parent ~ ( BindingData!Type.Parent.length > 0 ? "." : "" ) ~ BindingData!Type.Name;
+enum BindingParentName( alias Type )	= BindingData!Type.Parent;
+enum BindingParentName( Type )			= BindingData!Type.Parent;
+
+enum BindingFullName( alias Type )		= BindingData!Type.Parent ~ "." ~ BindingData!Type.Name;
+enum BindingFullName( Type )			= BindingData!Type.Parent ~ ( BindingData!Type.Parent.length > 0 ? "." : "" ) ~ BindingData!Type.Name;
 //----------------------------------------------------------------------------
 
 package:

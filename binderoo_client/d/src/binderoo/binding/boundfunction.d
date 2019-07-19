@@ -118,6 +118,7 @@ struct BoundFunctionFunctions( Descriptor )
 		string[] generate()
 		{
 			string[] output;
+
 			static foreach( param; Descriptor.ParametersAsTuple )
 			{
 				output ~= TypeString!( param.Type ).CSharpDecl;
@@ -141,6 +142,7 @@ struct BoundFunctionFunctions( Descriptor )
 		{
 			string[] output;
 
+			import binderoo.binding.attributes : BindingFullName;
 			static foreach( param; Descriptor.ParametersAsTuple )
 			{
 				output ~= TypeString!( param.Type ).CSharpMarshalledDecl;
