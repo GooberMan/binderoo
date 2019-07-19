@@ -1550,6 +1550,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		}
 
 		string strPrototype;
+		string strReturnType;
 		if( property.Getter !is null )
 		{
 			strPrototype = property.Getter.CSharpPrototype();
@@ -1557,11 +1558,15 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		else
 		{
 			strPrototype = property.Setter.CSharpPrototype();
+			strReturnType = property.Setter.CSharpReturnType();
 		}
 
 		import std.string : lastIndexOf;
 		ptrdiff_t FoundName = strPrototype.lastIndexOf( property.Name );
 		strPrototype = strPrototype[ 0 .. FoundName + property.Name.length ];
+
+		// TODO: HACK BECAUSE I CANT WORK OUT WHY
+		strReturnType = strPrototype[ 0 .. FoundName - 1 ];
 
 		string[] lines;
 
@@ -1580,7 +1585,18 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 
 		if( property.Setter !is null )
 		{
-			strParameterNames ~= "value";
+			if( strReturnType == "string" )
+			{
+				strParameterNames ~= "new SliceString( value ).SliceData";
+			}
+			else if( strReturnType.endsWith( "[]" ) )
+			{
+				strParameterNames ~= "new Slice< " ~ strReturnType[ 0 .. $ - 2 ] ~ " >( value ).SliceData";
+			}
+			else
+			{
+				strParameterNames ~= "value";
+			}
 			lines ~= strContentTabs ~ "set { " ~ generateCSharpFunctionCallForFunction( property.Setter, property.SetterIndex, strParameterNames, true ) ~ " }";
 		}
 
@@ -1745,6 +1761,10 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 				goto case Struct;
 			
 			case Struct:
+				if( obj.eType == Struct )
+				{
+					lines ~= strObjTabs ~ "[ Serializable ]";
+				}
 				foreach( strTok; obj.strTypeDecl )
 				{
 					lines ~= strObjTabs ~ strTok;
