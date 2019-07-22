@@ -914,9 +914,22 @@ template AliasFromName( string strName, string strModuleName = "" )
 {
 	static if( strModuleName.length )
 	{
-		mixin( "import " ~ strModuleName ~ ";" );
+		mixin( "static import " ~ strModuleName ~ ";" );
+		enum FullName = strModuleName ~ "." ~ strName;
 	}
-	mixin( "alias AliasFromName = binderoo.traits.Alias!( " ~ strName ~ ");" );
+	else
+	{
+		alias FullName = strName;
+	}
+
+	static if( __traits( compiles, { mixin( "alias AliasFromName = binderoo.traits.Alias!( " ~ FullName ~ ");" ); } ) )
+	{
+		mixin( "alias AliasFromName = binderoo.traits.Alias!( " ~ FullName ~ ");" );
+	}
+	else
+	{
+		alias AliasFromName = void;
+	}
 }
 //----------------------------------------------------------------------------
 
@@ -925,7 +938,7 @@ template IsAlias( alias Parent, string SymbolName )
 	static bool impl()
 	{
 		mixin( "static import " ~ ModuleName!Parent ~ ";" );
-		static if( __traits( compiles, "alias ThisSymbol = binderoo.traits.Alias!( " ~ FullTypeName!Parent ~ "." ~ SymbolName ~ " );" ) )
+		static if( __traits( compiles, { mixin( "alias ThisSymbol = binderoo.traits.Alias!( " ~ FullTypeName!Parent ~ "." ~ SymbolName ~ " );" ); } ) )
 		{
 			mixin( "alias ThisSymbol = binderoo.traits.Alias!( " ~ FullTypeName!Parent ~ "." ~ SymbolName ~ " );" );
 			return SymbolName != ThisSymbol.stringof; //__traits( identifier, ThisSymbol );

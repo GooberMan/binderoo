@@ -316,6 +316,8 @@ template ModuleEnumDescriptors( alias ParentClass, Aliases... )
 template ModuleTemplateInstances( alias Parent, Symbols... )
 {
 	mixin( "import " ~ ModuleName!Parent ~ ";" );
+
+	import binderoo.traits : AliasSeq;
 	
 	string[] getTemplates()
 	{
@@ -697,339 +699,341 @@ BoundFunction[] generateFunctionExports( alias Options, alias Parent, ExportType
 			//pragma( msg, "Skipping functions for " ~ Scope.stringof ~ "..." );
 			return [];
 		}
-
-		//pragma( msg, "Processing " ~ Scope.stringof ~ " for exports" );
-
-		enum ExportAllFound = IntroducedVersion != BindExport.iIntroducedVersion.init;
-		enum ScopeIsAggregate = IsAggregateType!Scope;
-
-		BoundFunction[] foundExports;
-
-		void handleFunction( alias Descriptor )( int iIntroducedVersion )
+		else
 		{
-			static if( Descriptor.HasUDA!BindIgnore || Descriptor.IsOperator )
+			//pragma( msg, "Processing " ~ Scope.stringof ~ " for exports" );
+
+			enum ExportAllFound = IntroducedVersion != BindExport.iIntroducedVersion.init;
+			enum ScopeIsAggregate = IsAggregateType!Scope;
+
+			BoundFunction[] foundExports;
+
+			void handleFunction( alias Descriptor )( int iIntroducedVersion )
 			{
-				return;
+				static if( Descriptor.HasUDA!BindIgnore || Descriptor.IsOperator )
+				{
+					return;
+				}
+				else static if( Descriptor.IsImplementedInType && !Descriptor.IsXDestructor ) // TODO: FIX THIS DESTRUCTOR JUNK
+				{
+					void* pFunctionCDecl;
+					void* pFunctionCPPDecl;
+
+					alias NewFunc = CPPFunctionGenerator!Descriptor;
+
+					static if( Descriptor.IsCPlusPlusFunction )
+					{
+						pFunctionCDecl = &NewFunc.FuncCDecl;
+						mixin( "pFunctionCPPDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+					}
+					else static if( Descriptor.IsCFunction )
+					{
+						mixin( "pFunctionCDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
+						pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
+					}
+					else
+					{
+						//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
+						pFunctionCDecl = &NewFunc.FuncCDecl;
+						pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
+					}
+
+					enum FullName		= Descriptor.BindingFullName;
+					enum Signature		= FunctionString!( Descriptor ).CSignature;
+					enum DDecl			= FunctionString!( Descriptor ).DDecl;
+					enum CDecl			= FunctionString!( Descriptor ).CDecl;
+					enum CSharpDecl		= FunctionString!( Descriptor ).CSharpDecl;
+					enum ParameterNames	= FunctionString!( Descriptor ).ParameterNames;
+
+					static if( Descriptor.IsStatic )
+					{
+						static if( Descriptor.IsMemberFunction )
+						{
+							enum MethodFlag = BoundFunction.FunctionKind.Method;
+						}
+						else
+						{
+							enum MethodFlag = BoundFunction.FunctionKind.Undefined;
+						}
+
+						static if( Descriptor.IsProperty )
+						{
+							enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property | MethodFlag );
+						}
+						else
+						{
+							enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Static | MethodFlag );
+						}
+					}
+					else
+					{
+						static if( Descriptor.IsProperty )
+						{
+							enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property );
+						}
+						else static if( Descriptor.IsConstructor )
+						{
+							enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Constructor );
+						}
+						else static if( Descriptor.IsDestructor )
+						{
+							enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Destructor );
+						}
+						else
+						{
+							enum FunctionKind = BoundFunction.FunctionKind.Method;
+						}
+					}
+
+					//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
+					//pragma( msg, " -> Parameter names: " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
+					//pragma( msg, " -> C Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CPrototype() );
+					//pragma( msg, " -> Parameter types (C): " ~ BoundFunctionFunctions!( Descriptor ).CParameterTypes().joinWith( ", " ) );
+					//pragma( msg, " -> D Declaration: " ~ BoundFunctionFunctions!( Descriptor ).DPrototype() );
+					//pragma( msg, " -> Parameter types (D): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
+					//pragma( msg, " -> C# Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpPrototype() );
+					//pragma( msg, " -> C# Marshalled declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype() );
+					//pragma( msg, " -> Parameter types (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes().joinWith( ", " ) );
+					//pragma( msg, " -> Parameter call (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers().joinWith( ", " ) );
+
+					foundExports ~= BoundFunction( DString( FullName )
+													, DString( Signature )
+													, DString( "" )
+													, DString( "" )
+													, Slice!DString.init
+													, Slice!DString.init
+													, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
+													, pFunctionCDecl
+													, pFunctionCPPDecl
+													, iIntroducedVersion
+													, 0
+													, BoundFunction.Resolution.Exported
+													, BoundFunction.CallingConvention.CPP
+													, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( Descriptor.ReturnType ) )
+													, Descriptor.IsOverride ? BoundFunction.Flags.IsOverride : BoundFunction.Flags.None
+													, &BoundFunctionFunctions!( Descriptor ).CPrototype
+													, &BoundFunctionFunctions!( Descriptor ).DPrototype
+													, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
+													, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype
+													, &BoundFunctionFunctions!( Descriptor ).ParameterNames
+													, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).CSharpReturnType
+													, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledParameterTypes
+													, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledReturnType
+													, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
+												);
+				}
 			}
-			else static if( Descriptor.IsImplementedInType && !Descriptor.IsXDestructor ) // TODO: FIX THIS DESTRUCTOR JUNK
+
+			void handleVariable( Type, size_t TupleIndex )()
 			{
-				void* pFunctionCDecl;
-				void* pFunctionCPPDecl;
+				alias VariableDesc = VariableDescriptor!( Type.tupleof[ TupleIndex ] );
+				alias GeneratedFuncs = CPPFunctionGenerator!VariableDesc;
+				alias GetterDesc = FunctionDescriptor!( GeneratedFuncs.GetterCPPDecl );
+				alias SetterDesc = FunctionDescriptor!( GeneratedFuncs.SetterCPPDecl );
 
-				alias NewFunc = CPPFunctionGenerator!Descriptor;
+				enum FullNameGetter = VariableDesc.BindingFullName ~ "_Getter";
+				enum SignatureGetter	= FunctionString!( GetterDesc ).CSignature;
 
-				static if( Descriptor.IsCPlusPlusFunction )
-				{
-					pFunctionCDecl = &NewFunc.FuncCDecl;
-					mixin( "pFunctionCPPDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
-				}
-				else static if( Descriptor.IsCFunction )
-				{
-					mixin( "pFunctionCDecl = &" ~ Descriptor.FullyQualifiedName ~ ";" );
-					pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
-				}
-				else
-				{
-					//mixin( "alias Descriptor = FunctionDescriptor!( NewFunc." ~ OriginalDescriptor.Name ~ ", 0 );" );
-					pFunctionCDecl = &NewFunc.FuncCDecl;
-					pFunctionCPPDecl = &NewFunc.FuncCPPDecl;
-				}
+				enum FullNameSetter = VariableDesc.BindingFullName ~ "_Setter";
+				enum SignatureSetter	= FunctionString!( SetterDesc ).CSignature;
 
-				enum FullName		= Descriptor.BindingFullName;
-				enum Signature		= FunctionString!( Descriptor ).CSignature;
-				enum DDecl			= FunctionString!( Descriptor ).DDecl;
-				enum CDecl			= FunctionString!( Descriptor ).CDecl;
-				enum CSharpDecl		= FunctionString!( Descriptor ).CSharpDecl;
-				enum ParameterNames	= FunctionString!( Descriptor ).ParameterNames;
+				enum FunctionKind = cast(BoundFunction.FunctionKind)( BoundFunction.FunctionKind.CodeGenerated | BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property );
 
-				static if( Descriptor.IsStatic )
-				{
-					static if( Descriptor.IsMemberFunction )
-					{
-						enum MethodFlag = BoundFunction.FunctionKind.Method;
-					}
-					else
-					{
-						enum MethodFlag = BoundFunction.FunctionKind.Undefined;
-					}
+				//pragma( msg, "Exporting " ~ VariableDesc.BindingFullName ~ " Properties: " );
+				//pragma( msg, " -> Getter: " ~ FullNameGetter ~ " => " ~ SignatureGetter );
+				//pragma( msg, " -> Setter: " ~ FullNameSetter ~ " => " ~ SignatureSetter );
+				//pragma( msg, " -> C# Getter Declaration: " ~ BoundFunctionFunctions!( GetterDesc ).CSharpPrototype() );
+				//pragma( msg, " -> C# Setter Declaration: " ~ BoundFunctionFunctions!( SetterDesc ).CSharpPrototype() );
 
-					static if( Descriptor.IsProperty )
-					{
-						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property | MethodFlag );
-					}
-					else
-					{
-						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Static | MethodFlag );
-					}
-				}
-				else
-				{
-					static if( Descriptor.IsProperty )
-					{
-						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Property );
-					}
-					else static if( Descriptor.IsConstructor )
-					{
-						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Constructor );
-					}
-					else static if( Descriptor.IsDestructor )
-					{
-						enum FunctionKind = cast( BoundFunction.FunctionKind )( BoundFunction.FunctionKind.Method | BoundFunction.FunctionKind.Destructor );
-					}
-					else
-					{
-						enum FunctionKind = BoundFunction.FunctionKind.Method;
-					}
-				}
-
-				//pragma( msg, "Exporting " ~ FullName ~ ": " ~ Signature );
-				//pragma( msg, " -> Parameter names: " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
-				//pragma( msg, " -> C Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CPrototype() );
-				//pragma( msg, " -> Parameter types (C): " ~ BoundFunctionFunctions!( Descriptor ).CParameterTypes().joinWith( ", " ) );
-				//pragma( msg, " -> D Declaration: " ~ BoundFunctionFunctions!( Descriptor ).DPrototype() );
-				//pragma( msg, " -> Parameter types (D): " ~ BoundFunctionFunctions!( Descriptor ).ParameterNames().joinWith( ", " ) );
-				//pragma( msg, " -> C# Declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpPrototype() );
-				//pragma( msg, " -> C# Marshalled declaration: " ~ BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype() );
-				//pragma( msg, " -> Parameter types (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes().joinWith( ", " ) );
-				//pragma( msg, " -> Parameter call (C#): " ~ BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers().joinWith( ", " ) );
-
-				foundExports ~= BoundFunction( DString( FullName )
-												, DString( Signature )
+				foundExports ~= BoundFunction( DString( FullNameGetter )
+												, DString( SignatureGetter )
 												, DString( "" )
 												, DString( "" )
 												, Slice!DString.init
 												, Slice!DString.init
-												, BoundFunction.Hashes( fnv1a_64( FullName ), fnv1a_64( Signature ) )
-												, pFunctionCDecl
-												, pFunctionCPPDecl
-												, iIntroducedVersion
+												, BoundFunction.Hashes( fnv1a_64( FullNameGetter ), fnv1a_64( SignatureGetter ) )
+												, &GeneratedFuncs.GetterCDecl
+												, &GeneratedFuncs.GetterCPPDecl
+												, 1 // HORRIBLE HACK
 												, 0
 												, BoundFunction.Resolution.Exported
 												, BoundFunction.CallingConvention.CPP
-												, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( Descriptor.ReturnType ) )
-												, Descriptor.IsOverride ? BoundFunction.Flags.IsOverride : BoundFunction.Flags.None
-												, &BoundFunctionFunctions!( Descriptor ).CPrototype
-												, &BoundFunctionFunctions!( Descriptor ).DPrototype
-												, &BoundFunctionFunctions!( Descriptor ).CSharpPrototype
-												, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledPrototype
-												, &BoundFunctionFunctions!( Descriptor ).ParameterNames
-												, &BoundFunctionFunctions!( Descriptor ).CParameterTypes
-												, &BoundFunctionFunctions!( Descriptor ).DParameterTypes
-												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterTypes
-												, &BoundFunctionFunctions!( Descriptor ).CSharpReturnType
-												, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledParameterTypes
-												, &BoundFunctionFunctions!( Descriptor ).CSharpMarshalledReturnType
-												, &BoundFunctionFunctions!( Descriptor ).CSharpParameterNamesWithQualifiers
+												, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( GetterDesc.ReturnType ) )
+												, BoundFunction.Flags.None
+												, &BoundFunctionFunctions!( GetterDesc ).CPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).DPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledPrototype
+												, &BoundFunctionFunctions!( GetterDesc ).ParameterNames
+												, &BoundFunctionFunctions!( GetterDesc ).CParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).DParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpReturnType
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledParameterTypes
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledReturnType
+												, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterNamesWithQualifiers
+											);
+
+				foundExports ~= BoundFunction( DString( FullNameSetter )
+												, DString( SignatureSetter )
+												, DString( "" )
+												, DString( "" )
+												, Slice!DString.init
+												, Slice!DString.init
+												, BoundFunction.Hashes( fnv1a_64( FullNameSetter ), fnv1a_64( SignatureSetter ) )
+												, &GeneratedFuncs.SetterCDecl
+												, &GeneratedFuncs.SetterCPPDecl
+												, 1 // HORRIBLE HACK
+												, 0
+												, BoundFunction.Resolution.Exported
+												, BoundFunction.CallingConvention.CPP
+												, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( SetterDesc.ReturnType ) )
+												, BoundFunction.Flags.None
+												, &BoundFunctionFunctions!( SetterDesc ).CPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).DPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledPrototype
+												, &BoundFunctionFunctions!( SetterDesc ).ParameterNames
+												, &BoundFunctionFunctions!( SetterDesc ).CParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).DParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpReturnType
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledParameterTypes
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledReturnType
+												, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterNamesWithQualifiers
 											);
 			}
-		}
 
-		void handleVariable( Type, size_t TupleIndex )()
-		{
-			alias VariableDesc = VariableDescriptor!( Type.tupleof[ TupleIndex ] );
-			alias GeneratedFuncs = CPPFunctionGenerator!VariableDesc;
-			alias GetterDesc = FunctionDescriptor!( GeneratedFuncs.GetterCPPDecl );
-			alias SetterDesc = FunctionDescriptor!( GeneratedFuncs.SetterCPPDecl );
-
-			enum FullNameGetter = VariableDesc.BindingFullName ~ "_Getter";
-			enum SignatureGetter	= FunctionString!( GetterDesc ).CSignature;
-
-			enum FullNameSetter = VariableDesc.BindingFullName ~ "_Setter";
-			enum SignatureSetter	= FunctionString!( SetterDesc ).CSignature;
-
-			enum FunctionKind = cast(BoundFunction.FunctionKind)( BoundFunction.FunctionKind.CodeGenerated | BoundFunction.FunctionKind.Static | BoundFunction.FunctionKind.Property );
-
-			//pragma( msg, "Exporting " ~ VariableDesc.BindingFullName ~ " Properties: " );
-			//pragma( msg, " -> Getter: " ~ FullNameGetter ~ " => " ~ SignatureGetter );
-			//pragma( msg, " -> Setter: " ~ FullNameSetter ~ " => " ~ SignatureSetter );
-			//pragma( msg, " -> C# Getter Declaration: " ~ BoundFunctionFunctions!( GetterDesc ).CSharpPrototype() );
-			//pragma( msg, " -> C# Setter Declaration: " ~ BoundFunctionFunctions!( SetterDesc ).CSharpPrototype() );
-
-			foundExports ~= BoundFunction( DString( FullNameGetter )
-											, DString( SignatureGetter )
-											, DString( "" )
-											, DString( "" )
-											, Slice!DString.init
-											, Slice!DString.init
-											, BoundFunction.Hashes( fnv1a_64( FullNameGetter ), fnv1a_64( SignatureGetter ) )
-											, &GeneratedFuncs.GetterCDecl
-											, &GeneratedFuncs.GetterCPPDecl
-											, 1 // HORRIBLE HACK
-											, 0
-											, BoundFunction.Resolution.Exported
-											, BoundFunction.CallingConvention.CPP
-											, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( GetterDesc.ReturnType ) )
-											, BoundFunction.Flags.None
-											, &BoundFunctionFunctions!( GetterDesc ).CPrototype
-											, &BoundFunctionFunctions!( GetterDesc ).DPrototype
-											, &BoundFunctionFunctions!( GetterDesc ).CSharpPrototype
-											, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledPrototype
-											, &BoundFunctionFunctions!( GetterDesc ).ParameterNames
-											, &BoundFunctionFunctions!( GetterDesc ).CParameterTypes
-											, &BoundFunctionFunctions!( GetterDesc ).DParameterTypes
-											, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterTypes
-											, &BoundFunctionFunctions!( GetterDesc ).CSharpReturnType
-											, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledParameterTypes
-											, &BoundFunctionFunctions!( GetterDesc ).CSharpMarshalledReturnType
-											, &BoundFunctionFunctions!( GetterDesc ).CSharpParameterNamesWithQualifiers
-										);
-
-			foundExports ~= BoundFunction( DString( FullNameSetter )
-											, DString( SignatureSetter )
-											, DString( "" )
-											, DString( "" )
-											, Slice!DString.init
-											, Slice!DString.init
-											, BoundFunction.Hashes( fnv1a_64( FullNameSetter ), fnv1a_64( SignatureSetter ) )
-											, &GeneratedFuncs.SetterCDecl
-											, &GeneratedFuncs.SetterCPPDecl
-											, 1 // HORRIBLE HACK
-											, 0
-											, BoundFunction.Resolution.Exported
-											, BoundFunction.CallingConvention.CPP
-											, cast( BoundFunction.FunctionKind )( FunctionKind | BoundFunctionReturnTypeKind!( SetterDesc.ReturnType ) )
-											, BoundFunction.Flags.None
-											, &BoundFunctionFunctions!( SetterDesc ).CPrototype
-											, &BoundFunctionFunctions!( SetterDesc ).DPrototype
-											, &BoundFunctionFunctions!( SetterDesc ).CSharpPrototype
-											, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledPrototype
-											, &BoundFunctionFunctions!( SetterDesc ).ParameterNames
-											, &BoundFunctionFunctions!( SetterDesc ).CParameterTypes
-											, &BoundFunctionFunctions!( SetterDesc ).DParameterTypes
-											, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterTypes
-											, &BoundFunctionFunctions!( SetterDesc ).CSharpReturnType
-											, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledParameterTypes
-											, &BoundFunctionFunctions!( SetterDesc ).CSharpMarshalledReturnType
-											, &BoundFunctionFunctions!( SetterDesc ).CSharpParameterNamesWithQualifiers
-										);
-		}
-
-		void handleVariables( Type )()
-		{
-			static foreach( iIndex; 0 .. Type.tupleof.length )
+			void handleVariables( Type )()
 			{
-				static if( VariableDescriptor!( Type.tupleof[ iIndex ] ).PrivacyLevel == PrivacyLevel.Public )
+				static foreach( iIndex; 0 .. Type.tupleof.length )
 				{
-					pragma( msg, "Handling variable " ~ __traits( identifier, Type.tupleof[ iIndex ] ) );
-					handleVariable!( Type, iIndex );
+					static if( VariableDescriptor!( Type.tupleof[ iIndex ] ).PrivacyLevel == PrivacyLevel.Public )
+					{
+						pragma( msg, "Handling variable " ~ __traits( identifier, Type.tupleof[ iIndex ] ) );
+						handleVariable!( Type, iIndex );
+					}
 				}
 			}
-		}
 
-		foreach( SymbolName; Symbols )
-		{
-			mixin( "enum CompilesGetOverloads = __traits( compiles, __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ) );" );
-			mixin( "enum CompilesIsAggregate = __traits( compiles, IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " ) );" );
+			foreach( SymbolName; Symbols )
+			{
+				mixin( "enum CompilesGetOverloads = __traits( compiles, __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ) );" );
+				mixin( "enum CompilesIsAggregate = __traits( compiles, IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " ) );" );
 
-			static if( CompilesGetOverloads )
-			{
-				mixin( "enum NumOverloads = __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ).length;" );
-			}
-			else
-			{
-				enum NumOverloads = 0;
-			}
-
-			static if( CompilesIsAggregate )
-			{
-				mixin( "enum IsAggregate = IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " );" );
-			}
-			else
-			{
-				enum IsAggregate = false;
-			}
-
-			static if( SymbolName == "Monitor"
-						|| SymbolName == "Object" )
-			{
-				//pragma( msg, "Skipping " ~ Scope.stringof ~ "." ~ SymbolName ~ "..." );
-			}
-			else
-			{
-				static if( NumOverloads > 0 )
+				static if( CompilesGetOverloads )
 				{
-					static if( ExportAllFound )
-					{
-						enum UDA = BindExport( IntroducedVersion, -1 );
-					}
-					else
-					{
-						alias UDA = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
-					}
-
-					static if( is( UDA : void ) && Options.ExportUntagged )
-					{
-						enum ExportData = BindExport( 1, -1 );
-					}
-					else
-					{
-						alias ExportData = UDA;
-					}
-
-					static if( !is( ExportData : void ) )
-					{
-						static foreach( iIndex, CurrFuncSymbol; __traits( getOverloads, Scope, SymbolName ) )
-						{
-							static if( IsExternallyAccessible!CurrFuncSymbol )
-							{
-								static if( !ScopeIsAggregate )
-								{
-									handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
-								}
-								else
-								{
-									handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
-								}
-							}
-						}
-					}
+					mixin( "enum NumOverloads = __traits( getOverloads, Scope, \"" ~ SymbolName ~ "\" ).length;" );
 				}
-				else static if( IsAggregate )
+				else
 				{
-					mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
+					enum NumOverloads = 0;
+				}
 
-					static if( !IsAlias!( Scope, SymbolName )
-							|| IsTemplatedType!Symbol && HasUDA!( Symbol, BindInstancesOf ) )
+				static if( CompilesIsAggregate )
+				{
+					mixin( "enum IsAggregate = IsAggregateType!( " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ " );" );
+				}
+				else
+				{
+					enum IsAggregate = false;
+				}
+
+				static if( SymbolName == "Monitor"
+							|| SymbolName == "Object" )
+				{
+					//pragma( msg, "Skipping " ~ Scope.stringof ~ "." ~ SymbolName ~ "..." );
+				}
+				else
+				{
+					static if( NumOverloads > 0 )
 					{
-						//static if( IsTemplatedType!Symbol && HasUDA!( Symbol, BindInstancesOf ) ) pragma( msg, "Exporting functions for " ~ BindingFullName!Symbol );
-
 						static if( ExportAllFound )
 						{
 							enum UDA = BindExport( IntroducedVersion, -1 );
 						}
 						else
 						{
-							alias FoundUDA = GetUDA!( Symbol, BindExport );
+							alias UDA = GetUDA!( __traits( getOverloads, Scope, SymbolName )[ 0 ], BindExport );
+						}
 
-							static if( is( FoundUDA : void ) && Options.ExportUntagged )
+						static if( is( UDA : void ) && Options.ExportUntagged )
+						{
+							enum ExportData = BindExport( 1, -1 );
+						}
+						else
+						{
+							alias ExportData = UDA;
+						}
+
+						static if( !is( ExportData : void ) )
+						{
+							static foreach( iIndex, CurrFuncSymbol; __traits( getOverloads, Scope, SymbolName ) )
 							{
-								enum UDA = BindExport( 1, -1 );
+								static if( IsExternallyAccessible!CurrFuncSymbol )
+								{
+									static if( !ScopeIsAggregate )
+									{
+										handleFunction!( FunctionDescriptor!( CurrFuncSymbol, iIndex ) )( ExportData.iIntroducedVersion );
+									}
+									else
+									{
+										handleFunction!( FunctionDescriptor!( Scope, SymbolName, iIndex ) )( ExportData.iIntroducedVersion );
+									}
+								}
+							}
+						}
+					}
+					else static if( IsAggregate )
+					{
+						mixin( "alias Symbol = " ~ FullTypeName!Scope ~ "." ~ SymbolName ~ ";" );
+
+						static if( !IsAlias!( Scope, SymbolName )
+								|| IsTemplatedType!Symbol && HasUDA!( Symbol, BindInstancesOf ) )
+						{
+							//static if( IsTemplatedType!Symbol && HasUDA!( Symbol, BindInstancesOf ) ) pragma( msg, "Exporting functions for " ~ BindingFullName!Symbol );
+
+							static if( ExportAllFound )
+							{
+								enum UDA = BindExport( IntroducedVersion, -1 );
 							}
 							else
 							{
-								alias UDA = FoundUDA;
-							}
-						}
+								alias FoundUDA = GetUDA!( Symbol, BindExport );
 
-						static if( !is( UDA : void ) )
-						{
-							enum NewIntroducedVersion = UDA.iIntroducedVersion;
-							foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
-							static if( is( Symbol == class ) )
+								static if( is( FoundUDA : void ) && Options.ExportUntagged )
+								{
+									enum UDA = BindExport( 1, -1 );
+								}
+								else
+								{
+									alias UDA = FoundUDA;
+								}
+							}
+
+							static if( !is( UDA : void ) )
 							{
-								handleVariables!( Symbol )();
+								enum NewIntroducedVersion = UDA.iIntroducedVersion;
+								foundExports ~= functionGrabber!( NewIntroducedVersion, Symbol, __traits( allMembers, Symbol ) )();
+								static if( is( Symbol == class ) )
+								{
+									handleVariables!( Symbol )();
+								}
 							}
 						}
-					}
-					else
-					{
-						//pragma( msg, "Not grabbing functions for " ~ SymbolName );
+						else
+						{
+							//pragma( msg, "Not grabbing functions for " ~ SymbolName );
+						}
 					}
 				}
 			}
-		}
 
-		return foundExports;
+			return foundExports;
+		}
 	}
 
 	static if( ExportTypes.length == 0 )

@@ -38,6 +38,8 @@ public import std.typetuple;
 
 struct TypeDescriptor( T, bool bIsRef = false )
 {
+	static import binderoo.binding.attributes;
+
 	template HasUDA( Attr )
 	{
 		static if( is( T == void ) )

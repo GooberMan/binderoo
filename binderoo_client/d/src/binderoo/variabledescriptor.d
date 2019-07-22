@@ -42,6 +42,8 @@ public import std.typetuple;
 // This wrapper is designed to be used with Type.tupleof iterators
 struct VariableDescriptor( alias Variable )
 {
+	static import binderoo.binding.attributes;
+
 	template HasUDA( Attr )
 	{
 		static if( is( ET == void ) )

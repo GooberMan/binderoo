@@ -56,6 +56,7 @@ else { enum DefaultCollectionOrder = CollectionOrder.Normal; }
 
 struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 {
+	static import binderoo.binding.attributes;
 	mixin( "import " ~ binderoo.traits.ModuleName!symbol ~ ";" );
 
 	template HasUDA( Attr )
@@ -270,6 +271,7 @@ struct FunctionDescriptor( alias symbol, size_t iOverloadIndex = 0 )
 
 struct FunctionDescriptor( T, string symbolName, size_t iSymbolIndex )
 {
+	static import binderoo.binding.attributes;
 	mixin( "import " ~ binderoo.traits.ModuleName!T ~ ";" );
 
 	template HasUDA( Attr )
