@@ -86,7 +86,8 @@ struct Atomic( T ) if( IsIntegral!( IntegralTypeOf!T ) )
 	pragma( inline ) void store( const( T ) val )									{ atomicStore( m_val, cast( Storage )val ); }
 	//------------------------------------------------------------------------
 
-	pragma( inline ) bool compare_exchange_strong( const( T ) val )					{ return cas( &m_val, cast( Storage )load(), cast( Storage )val ); }
+	pragma( inline ) bool compare_exchange_weak( const( T ) expected, const( T ) val )		{ return cas( &m_val, cast( Storage )expected, cast( Storage )val ); }
+	pragma( inline ) bool compare_exchange_strong( const( T ) expected, const( T ) val )	{ return cas( &m_val, cast( Storage )expected, cast( Storage )val ); }
 	//------------------------------------------------------------------------
 
 	alias fetch_add = fetch!"+";
