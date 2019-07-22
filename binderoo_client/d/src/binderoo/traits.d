@@ -244,6 +244,9 @@ template IsEnum( T )
 }
 //----------------------------------------------------------------------------
 
+enum IsIntegralEnum( T ) = IsEnum!T && IsIntegral!( IntegralTypeOf!T );
+//----------------------------------------------------------------------------
+
 alias IsAggregateType( T ) = IsUserTypeButNotEnum!T;
 alias IsAggregateType( alias T ) = IsUserTypeButNotEnum!T;
 //----------------------------------------------------------------------------
