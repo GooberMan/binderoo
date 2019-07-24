@@ -866,6 +866,26 @@ template AliasSeq( A... )
 }
 //----------------------------------------------------------------------------
 
+template IndexOf( alias Symbol, Args... ) if( Args.length > 0 )
+{
+	ptrdiff_t impl()
+	{
+		ptrdiff_t output = -1;
+		static foreach( Index, CurrSymbol; Args )
+		{
+			static if( __traits( isSame, Symbol, CurrSymbol ) )
+			{
+				output = Index;
+			}
+		}
+
+		return output;
+	}
+
+	enum IndexOf = impl();
+}
+//----------------------------------------------------------------------------
+
 // TestTemplate must be instantiable, take one parameter, and alias to a boolean enum.
 template Filter( alias TestTemplate, Symbols... ) if( __traits( compiles, "TestTemplate!Symbols[ 0 ]" ) )
 {
@@ -1232,6 +1252,12 @@ string ModuleName( alias Symbol )()
 			{
 				return ModuleName!( __traits( parent, Symbol ) );
 			}
+		}
+		else
+		{
+			alias Thingy = Alias!( __traits( parent, Symbol ) );
+			pragma( msg, Thingy.stringof );
+			static assert( false, "Symbol " ~ Symbol.stringof ~ " has gone whack!" );
 		}
 	}
 }
