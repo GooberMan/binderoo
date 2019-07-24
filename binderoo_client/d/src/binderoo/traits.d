@@ -1307,11 +1307,14 @@ string[] gatherImports( T )()
 			}
 		}
 
-		foreach( member; __traits( allMembers, UT ) )
+		static if( IsAggregateType!UT )
 		{
-			static if( IsAccessible!( UT, member ) && IsMemberVariable!( __traits( getMember, UT, member ) ) && IsUserType!( typeof( __traits( getMember, UT, member ) ) ) )
+			static foreach( Index, member; UT.tupleof )
 			{
-				addModule( ModuleName!( typeof( __traits( getMember, UT, member ) ) ) );
+				static if( IsUserType!( typeof( member ) ) )
+				{
+					addModule( ModuleName!( typeof( member ) ) );
+				}
 			}
 		}
 	}
