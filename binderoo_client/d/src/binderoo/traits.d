@@ -304,7 +304,8 @@ template IsUnsigned( T )
 	enum IsUnsigned = is( T == ubyte )
 					|| is( T == ushort )
 					|| is( T == uint )
-					|| is( T == ulong );
+					|| is( T == ulong )
+					/+|| is( T == ucent )+/;
 }
 //----------------------------------------------------------------------------
 
@@ -314,10 +315,35 @@ template IsSigned( T )
 					|| is( T == short )
 					|| is( T == int )
 					|| is( T == long )
+					/+|| is( T == cent )+/
 					|| is( T == float )
 					|| is( T == double )
 					|| is( T == real );
 }
+//----------------------------------------------------------------------------
+
+enum IsBasicType( T )	= is( T == byte )
+						|| is( T == ubyte )
+						|| is( T == short )
+						|| is( T == ushort )
+						|| is( T == int )
+						|| is( T == uint )
+						|| is( T == long )
+						|| is( T == ulong )
+						/+|| is( T == cent )
+						|| is( T == ucent )+/
+						|| is( T == float )
+						|| is( T == double )
+						|| is( T == real )
+						|| is( T == ifloat )
+						|| is( T == idouble )
+						|| is( T == ireal )
+						|| is( T == cfloat )
+						|| is( T == cdouble )
+						|| is( T == creal )
+						|| is( T == char )
+						|| is( T == wchar )
+						|| is( T == dchar );
 //----------------------------------------------------------------------------
 
 template BaseType( Type ) if( is( Type == class ) )
