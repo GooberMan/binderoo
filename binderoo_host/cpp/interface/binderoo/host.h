@@ -40,6 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "binderoo/defs.h"
 #include "binderoo/slice.h"
 #include "binderoo/allocator.h"
+#include <vector>
 
 #include "binderoo/boundfunction.h"
 #include "binderoo/boundobject.h"
@@ -80,6 +81,8 @@ namespace binderoo
 	class BIND_DLL Host
 	{
 	public:
+		typedef std::vector< BoundFunction* > OverloadContainer;
+
 		Host( HostConfiguration& config );
 		~Host();
 		//--------------------------------------------------------------------
@@ -141,7 +144,9 @@ namespace binderoo
 		BIND_INLINE bool					destroyImportedClass( void* pObj )	{ return destroyImportedClass( TypeNames< _ty >::getDName(), pObj ); }
 		//--------------------------------------------------------------------
 
-		const BoundFunction*				getImportedFunctionDetails( const char* pName ) const;
+		const BoundFunction*				getImportedFunctionDetails( const char* pName, const char* pSignature ) const;
+
+		bool								getImportedFunctionDetails( const char* pName, OverloadContainer& allOverloads ) const;
 		//--------------------------------------------------------------------
 
 		// Returns a string allocated with your unaligned_alloc function that represents

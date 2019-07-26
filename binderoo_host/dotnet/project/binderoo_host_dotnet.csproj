@@ -54,6 +54,16 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)|$(Platform)|$(OS)' == 'Debug|x64|Windows_NT'">
+    <Content Include="..\..\..\bin\vs2015\binderoo_host\x64\Debug\binderoo_host.pdb">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)|$(Platform)|$(OS)' == 'Release|x64|Windows_NT'">
+    <Content Include="..\..\..\bin\vs2015\binderoo_host\x64\Release\binderoo_host.pdb">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
   <ItemGroup Condition="'$(Configuration)|$(Platform)|$(OS)' == 'Debug|x64|Unix'">
     <Content Include="..\..\..\bin\Linux\binderoo_host\x86_64\Debug\libbinderoo_host.so">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

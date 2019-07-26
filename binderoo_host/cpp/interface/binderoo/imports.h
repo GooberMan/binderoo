@@ -42,6 +42,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "binderoo/allocator.h"
 #include "binderoo/functiontraits.h"
 #include "binderoo/host.h"
+
+#include <atomic>
 //----------------------------------------------------------------------------
 
 namespace binderoo
@@ -56,6 +58,18 @@ namespace binderoo
 			: pObjectInstance( nullptr )
 			, pObjectDescriptor( nullptr )
 			, pSymbol( pSymbolName )
+			, pSymbolIdent( nullptr )
+			, iRefCount( 0 )
+			, eFlags( 0 )
+		{
+		}
+		//--------------------------------------------------------------------
+
+		BIND_INLINE ImportedBase( const char* pSymbolName, const char* pSymbolIdentity )
+			: pObjectInstance( nullptr )
+			, pObjectDescriptor( nullptr )
+			, pSymbol( pSymbolName )
+			, pSymbolIdent( pSymbolIdentity )
 			, iRefCount( 0 )
 			, eFlags( 0 )
 		{
@@ -78,11 +92,12 @@ namespace binderoo
 		template< typename _ty >
 		friend class RefCountedImportedClassInstance;
 
-		void*						pObjectInstance;
-		void*						pObjectDescriptor;
-		const char*					pSymbol;
-		int32_t				iRefCount;
-		int32_t				eFlags;
+		std::atomic< void* >		pObjectInstance;
+		std::atomic< void* >		pObjectDescriptor;
+		std::atomic< const char* >	pSymbol;
+		std::atomic< const char* >	pSymbolIdent;
+		std::atomic< int32_t >		iRefCount;
+		std::atomic< int32_t >		eFlags;
 	};
 	//------------------------------------------------------------------------
 
@@ -175,21 +190,21 @@ namespace binderoo
 
 		BIND_INLINE void				instantiate()
 		{
-			if( pObjectInstance != nullptr )
+			if( pObjectInstance.load() != nullptr )
 			{
 				deinstantiate();
 			}
 
-			pObjectInstance = Host::getActiveHost()->createImportedClass( pSymbol );
+			pObjectInstance = Host::getActiveHost()->createImportedClass( pSymbol.load() );
 		}
 		//--------------------------------------------------------------------
 
 		BIND_INLINE void				deinstantiate()
 		{
-			if( eFlags ^ ExternallyAllocated && pObjectInstance != nullptr )
+			if( eFlags.load() ^ ExternallyAllocated && pObjectInstance.load() != nullptr )
 			{
 				// TODO: notify the external allocator it's time to clean up...
-				Host::getActiveHost()->destroyImportedClass( pSymbol, pObjectInstance );
+				Host::getActiveHost()->destroyImportedClass( pSymbol.load(), pObjectInstance.load() );
 			}
 			pObjectInstance = nullptr;
 		}
@@ -204,7 +219,7 @@ namespace binderoo
 
 		BIND_INLINE _ty* const		getInternal()
 		{
-			return (_ty* const)pObjectInstance;
+			return (_ty* const)pObjectInstance.load();
 		}
 		//--------------------------------------------------------------------
 	};
@@ -303,7 +318,7 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		BIND_INLINE bool				isAcquired() const						{ return pRefCountedInstance != nullptr; }
-		BIND_INLINE int32_t				getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount : 0; }
+		BIND_INLINE int32_t				getRefCount() const						{ return isAcquired() ? pRefCountedInstance->iRefCount.load() : 0; }
 		BIND_INLINE _ty* const			operator->()							{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE const _ty* const	operator->() const						{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
 		BIND_INLINE						operator _ty* const ()					{ return isAcquired() ? pRefCountedInstance->get() : nullptr; }
@@ -353,15 +368,15 @@ namespace binderoo
 	};
 	//------------------------------------------------------------------------
 
-#if BIND_STANDARD != BIND_STANDARD_MSVC2012
+#if 1 //BIND_STANDARD != BIND_STANDARD_MSVC2012
 	template< typename _functiontraits >
 	class ImportedFunction : public ImportedBase
 	{
 	public:
 		typedef _functiontraits ThisType;
 
-		BIND_INLINE ImportedFunction( const char* pFunctionName )
-			: ImportedBase( pFunctionName )
+		BIND_INLINE ImportedFunction( const char* pFunctionName, const char* pFunctionSignature )
+			: ImportedBase( pFunctionName, pFunctionSignature )
 		{
 			Host::getActiveHost()->registerImportedFunction( this );
 		}
@@ -394,20 +409,20 @@ namespace binderoo
 
 		BIND_INLINE bool valid() const
 		{
-			return pObjectInstance != nullptr;
+			return pObjectInstance.load() != nullptr;
 		}
 		//--------------------------------------------------------------------
 
 	private:
 		BIND_INLINE typename ThisType::signature getInternal()
 		{
-			return (typename ThisType::signature)pObjectInstance;
+			return (typename ThisType::signature)pObjectInstance.load();
 		}
 		//--------------------------------------------------------------------
 
 		BIND_INLINE const BoundFunction*				getDescriptor() const
 		{
-			return (const BoundFunction*)pObjectDescriptor;
+			return (const BoundFunction*)pObjectDescriptor.load();
 		}
 		//--------------------------------------------------------------------
 	};
@@ -420,7 +435,7 @@ namespace binderoo
 	public:
 		typedef _functiontraits ThisType;
 
-		BIND_INLINE ImportedFunction( const char* pFunctionName )
+		BIND_INLINE ImportedFunction( const char* pFunctionName, const char* pFunctionSignature )
 			: ImportedBase( pFunctionName )
 		{
 			Host::getActiveHost()->registerImportedFunction( this );
@@ -464,7 +479,7 @@ namespace binderoo
 	protected:
 		BIND_INLINE typename ThisType::signature getInternal()
 		{
-			return (typename ThisType::signature)pObjectInstance;
+			return (typename ThisType::signature)pObjectInstance.load();
 		}
 	};
 #endif //BIND_STANDARD != BIND_STANDARD_MSVC2012

@@ -38,18 +38,25 @@ namespace binderoo
 		public ImportedClass( string strClassName )
 		{
 			m_pObj = binderoo_host_create_imported_class( strClassName );
+			m_pInstance = binderoo_host_get_class_ptr( m_pObj );
+			m_strClassName = strClassName;
+			m_bCreatedNew = true;
 		}
 		//--------------------------------------------------------------------
 
 		public ImportedClass( IntPtr instance, string strClassName )
 		{
 			m_pObj = binderoo_host_register_imported_class( instance, strClassName );
+			m_pInstance = instance;
+			m_strClassName = strClassName;
+			m_bCreatedNew = false;
 		}
 		//--------------------------------------------------------------------
 
 		public IntPtr Ptr
 		{
-			get { return binderoo_host_get_class_ptr( m_pObj ); }
+			// TODO: Revisit for rapid iteration
+			get { return m_pInstance; } // binderoo_host_get_class_ptr( m_pObj ); }
 		}
 		//--------------------------------------------------------------------
 		
@@ -94,6 +101,10 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		private IntPtr		m_pObj;
+		private IntPtr		m_pInstance;
+		private string		m_strClassName;
+		private bool		m_bCreatedNew;
+
 #endregion
 	}
 	//------------------------------------------------------------------------

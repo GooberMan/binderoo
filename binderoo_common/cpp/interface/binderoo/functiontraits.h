@@ -78,7 +78,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "binderoo/defs.h"
 
-#if BIND_STANDARD == BIND_STANDARD_MSVC2012
+#if 0 //BIND_STANDARD == BIND_STANDARD_MSVC2012
   #include "binderoo/functiontraits_vs2012.inl"
 #else
   #include "binderoo/functiontraits_cpp11.inl"

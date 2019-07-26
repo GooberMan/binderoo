@@ -380,31 +380,32 @@ namespace binderoo
 	};
 	//------------------------------------------------------------------------
 
-	template< typename _ty >
+	template< typename _ty, typename _hash >
 	struct HostBinding
 	{
-		typedef _ty BoundType;
+		typedef _ty			BoundType;
+		typedef _hash		HashType;
 
 		HostBinding()
 			: pLibrary( nullptr )
 			, pObject( nullptr )
-			, uSearchHash( 0 )
+			, uSearchHash( HashType() )
 		{
 		}
 		//--------------------------------------------------------------------
 
 		BIND_INLINE bool operator==( const BoundType* pRHS ) const				{ return pObject == pRHS; }
-		BIND_INLINE bool operator==( const uint64_t RHS ) const					{ return uSearchHash == RHS; }
+		BIND_INLINE bool operator==( const HashType& RHS ) const				{ return uSearchHash == RHS; }
 		//--------------------------------------------------------------------
 
 		HostDynamicLib*									pLibrary;
 		BoundType*										pObject;
-		uint64_t										uSearchHash;
+		HashType										uSearchHash;
 	};
 	//------------------------------------------------------------------------
 
-	typedef HostBinding< BoundFunction >																	HostBoundFunction;
-	typedef HostBinding< BoundObject >																		HostBoundObject;
+	typedef HostBinding< BoundFunction, BoundFunction::Hashes >												HostBoundFunction;
+	typedef HostBinding< BoundObject, uint64_t >															HostBoundObject;
 	//------------------------------------------------------------------------
 
 	struct HostImportedObjectInstance
@@ -492,7 +493,8 @@ namespace binderoo
 		bool						destroyImportedClass( const char* pName, void* pObject );
 		//--------------------------------------------------------------------
 
-		const HostBoundFunction*	getImportedFunctionDetails( const char* pName ) const;
+		const HostBoundFunction*	getImportedFunctionDetails( const char* pName, const char* pSignature ) const;
+		bool						getImportedFunctionDetails( const char* pName, Host::OverloadContainer& allOverloads ) const;
 		const HostBoundObject*		getImportedObjectDetails( const char* pName ) const;
 		//--------------------------------------------------------------------
 
@@ -610,11 +612,17 @@ bool binderoo::Host::destroyImportedClass( const char* pName, void* pObject )
 }
 //--------------------------------------------------------------------
 
-const binderoo::BoundFunction* binderoo::Host::getImportedFunctionDetails( const char* pName ) const
+const binderoo::BoundFunction* binderoo::Host::getImportedFunctionDetails( const char* pName, const char* pSignature ) const
 {
-	const HostBoundFunction* pFunc = pImplementation->getImportedFunctionDetails( pName );
+	const HostBoundFunction* pFunc = pImplementation->getImportedFunctionDetails( pName, pSignature );
 
 	return pFunc ? pFunc->pObject : nullptr;
+}
+//--------------------------------------------------------------------
+
+bool binderoo::Host::getImportedFunctionDetails( const char* pName, binderoo::Host::OverloadContainer& allOverloads ) const
+{
+	return pImplementation->getImportedFunctionDetails( pName, allOverloads );
 }
 //--------------------------------------------------------------------
 
@@ -701,7 +709,7 @@ void binderoo::HostImplementation::saveObjectData()
 	{
 		if( obj.pInstance->pObjectInstance )
 		{
-			const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor;
+			const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor.load();
 			const char* pSerialised = pObjDescriptor->pObject->serialise( obj.pInstance->pObjectInstance );
 			obj.strReloadData = pSerialised ? pSerialised : "";
 			obj.m_bHadInstance = true;
@@ -721,7 +729,7 @@ void binderoo::HostImplementation::loadObjectData()
 	{
 		if( obj.m_bHadInstance )
 		{
-			const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor;
+			const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor.load();
 			pObjDescriptor->pObject->deserialise( obj.pInstance->pObjectInstance, obj.strReloadData.c_str() );
 			obj.strReloadData.clear();
 			obj.m_bHadInstance = false;
@@ -764,7 +772,7 @@ void binderoo::HostImplementation::destroyImportedObjects()
 	{
 		if( obj.pInstance->pObjectInstance )
 		{
-			const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor;
+			const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor.load();
 			pObjDescriptor->pObject->free( obj.pInstance->pObjectInstance );
 			obj.pInstance->pObjectInstance = nullptr;
 		}
@@ -784,7 +792,7 @@ void binderoo::HostImplementation::recreateImportedObjects()
 {
 	for( binderoo::ImportedBase*& pImportedFunction : vecImportFunctionInstances )
 	{
-		const HostBoundFunction* pFunction = getImportedFunctionDetails( pImportedFunction->pSymbol );
+		const HostBoundFunction* pFunction = getImportedFunctionDetails( pImportedFunction->pSymbol, pImportedFunction->pSymbolIdent );
 
 		if( pFunction )
 		{
@@ -1015,7 +1023,7 @@ void binderoo::HostImplementation::collectBoundFunctions()
 			HostBoundFunction func;
 			func.pLibrary = &lib;
 			func.pObject = &exportedFunc;
-			func.uSearchHash = exportedFunc.functionHashes.uFunctionNameHash;
+			func.uSearchHash = exportedFunc.functionHashes;
 
 			vecBoundFunctions.push_back( func );
 		}
@@ -1279,7 +1287,7 @@ void binderoo::HostImplementation::deregisterImportedClassInstance( binderoo::Im
 
 void binderoo::HostImplementation::registerImportedFunction( binderoo::ImportedBase* pInstance )
 {
-	const HostBoundFunction* pFunction = getImportedFunctionDetails( pInstance->pSymbol );
+	const HostBoundFunction* pFunction = getImportedFunctionDetails( pInstance->pSymbol, pInstance->pSymbolIdent );
 
 	if( pFunction )
 	{
@@ -1349,9 +1357,9 @@ bool binderoo::HostImplementation::destroyImportedClass( const char* pName, void
 }
 //----------------------------------------------------------------------------
 
-const binderoo::HostBoundFunction* binderoo::HostImplementation::getImportedFunctionDetails( const char* pName ) const
+const binderoo::HostBoundFunction* binderoo::HostImplementation::getImportedFunctionDetails( const char* pName, const char* pSignature ) const
 {
-	uint64_t uNameHash = fnv1a_64( pName, strlen( pName ) );
+	BoundFunction::Hashes uNameHash = { fnv1a_64( pName, strlen( pName ) ), fnv1a_64( pSignature, strlen( pSignature ) ) };
 
 	// VS2012 was having issues with std::find and a lambda, so the comparison is in the type now...
 	auto found = std::find( vecBoundFunctions.begin(), vecBoundFunctions.end(), uNameHash );
@@ -1363,6 +1371,22 @@ const binderoo::HostBoundFunction* binderoo::HostImplementation::getImportedFunc
 	}
 
 	return nullptr;
+}
+//----------------------------------------------------------------------------
+
+bool binderoo::HostImplementation::getImportedFunctionDetails( const char* pName, binderoo::Host::OverloadContainer& allOverloads ) const
+{
+	uint64_t uNameHash = fnv1a_64( pName, strlen( pName ) );
+
+	for( const binderoo::HostBoundFunction& func : vecBoundFunctions )
+	{
+		if( func.uSearchHash.uFunctionNameHash == uNameHash )
+		{
+			allOverloads.push_back( func.pObject );
+		}
+	}
+
+	return !allOverloads.empty();
 }
 //----------------------------------------------------------------------------
 

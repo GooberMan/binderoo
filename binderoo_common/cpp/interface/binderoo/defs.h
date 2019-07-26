@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define BIND_COMPILERVER_GCC540			4
 
 /* The macro BIND_STANDARD will evaluate to one of these */
-#define BIND_STANDARD_MSVC2012			0
+//#define BIND_STANDARD_MSVC2012		0
 #define BIND_STANDARD_CPP11				1
 #define BIND_STANDARD_CPP14				2
 
@@ -111,9 +111,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	static_assert( false, "Unsupported compiler detected! Binderoo needs to know your compiler in order to compile correctly. Clang and MSVC are the currently supported C++ compilers." );
 #endif /* compiler checks */
 
-#if BIND_COMPILER == BIND_COMPILER_MSVC && BIND_COMPILERVER == BIND_COMPILERVER_MSVC2012
-	#define BIND_STANDARD				BIND_STANDARD_MSVC2012
-#else
+#if BIND_COMPILER == BIND_COMPILER_MSVC
 	#define BIND_STANDARD				BIND_STANDARD_CPP14
 #endif /* C++ version checks */
 
@@ -194,7 +192,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define BIND_ABSTRACT					abstract
 #define BIND_OVERRIDE					override
 
-#if BIND_STANDARD == BIND_STANDARD_MSVC2012
+#if 0 // BIND_STANDARD == BIND_STANDARD_MSVC2012
 	#define BIND_ALIGN( x )				__declspec( align( x ) )
 	#define BIND_ALIGNOF( x )			__alignof( x )
 #else /* anything but VC2012 */

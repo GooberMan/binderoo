@@ -45,7 +45,7 @@ namespace binderoo
 		
 		public IntPtr FuncPtr
 		{
-			get { return binderoo_host_get_function_ptr( m_pFunc ); }
+			get { return m_pInstance; } //return binderoo_host_get_function_ptr( m_pFunc ); }
 		}
 		//--------------------------------------------------------------------
 
@@ -78,6 +78,7 @@ namespace binderoo
 			if ( m_pFunc == IntPtr.Zero )
 			{
 				m_pFunc = binderoo_host_create_imported_function( m_strFuncName, m_strSignature );
+				m_pInstance = binderoo_host_get_function_ptr( m_pFunc );
 			}
 		}
 		//--------------------------------------------------------------------
@@ -93,6 +94,7 @@ namespace binderoo
 		//--------------------------------------------------------------------
 
 		private IntPtr		m_pFunc;
+		private IntPtr		m_pInstance;
 		private string		m_strFuncName;
 		private string		m_strSignature;
 #endregion

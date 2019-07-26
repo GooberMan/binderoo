@@ -221,7 +221,7 @@ namespace binderoo
 		}
 		//--------------------------------------------------------------------
 
-#if BIND_STANDARD == BIND_STANDARD_MSVC2012
+#if 0 //BIND_STANDARD == BIND_STANDARD_MSVC2012
 		template< typename _otherA, typename Args >
 		BIND_INLINE void				construct( _otherA* pPointer, Args&& args )
 		{

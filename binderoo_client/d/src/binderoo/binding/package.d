@@ -1633,6 +1633,12 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;
 			lines ~= Blank;
+			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "( IntPtr pInstance, string strClass )";
+			lines ~= strObjTabs ~ "{";
+			lines ~= strObjTabs ~ "\tpObj = new ImportedClass( pInstance, strClass );";
+			lines ~= strObjTabs ~ "}";
+			lines ~= strSeparator;
+			lines ~= Blank;
 			lines ~= strObjTabs ~ "protected " ~ obj.strName ~ "( string strClass )";
 			lines ~= strObjTabs ~ "{";
 			lines ~= strObjTabs ~ "\tpObj = new ImportedClass( strClass );";
@@ -1669,7 +1675,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			lines ~= strSeparator;
 			lines ~= Blank;
 			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "( IntPtr pInstance )";
-			lines ~= strObjTabs ~ "\t: base( pInstance )";
+			lines ~= strObjTabs ~ "\t: base( pInstance, \"" ~ obj.strFullName ~ "\" )";
 			lines ~= strObjTabs ~ "{";
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;

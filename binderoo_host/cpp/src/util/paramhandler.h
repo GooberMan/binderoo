@@ -384,18 +384,18 @@ private:
 template< typename _returnTy, typename... _paramsTy >
 struct Invoker
 {
-	static void call( const char* pFunctionName, ParamHandler& parameters )
+	static void call( const char* pFunctionName, const char* pFunctionSignature, ParamHandler& parameters )
 	{
-		callInternal( pFunctionName, parameters, std::make_index_sequence< sizeof...( _paramsTy ) >{} );
+		callInternal( pFunctionName, pFunctionSignature, parameters, std::make_index_sequence< sizeof...( _paramsTy ) >{} );
 	}
 
 private:
 	typedef binderoo::ImportedFunction< binderoo::FunctionTraits< _returnTy(*)(_paramsTy...) > > ImportedFunc;
 
 	template< size_t... Ints >
-	static _returnTy callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >&& /**/  )
+	static _returnTy callInternal( const char* pFunctionName, const char* pFunctionSignature, ParamHandler& parameters, std::index_sequence< Ints... >&& /**/  )
 	{
-		ImportedFunc importedFunction( pFunctionName );
+		ImportedFunc importedFunction( pFunctionName, pFunctionSignature );
 		_returnTy val = importedFunction( parameters.getParam< _paramsTy >( Ints )... );
 		parameters.setReturn( val );
 		return val;
@@ -405,18 +405,18 @@ private:
 template< typename... _paramsTy >
 struct Invoker< void, _paramsTy... >
 {
-	static void call( const char* pFunctionName, ParamHandler& parameters )
+	static void call( const char* pFunctionName, const char* pFunctionSignature, ParamHandler& parameters )
 	{
-		callInternal( pFunctionName, parameters, std::make_index_sequence< sizeof...( _paramsTy ) >{} );
+		callInternal( pFunctionName, pFunctionSignature, parameters, std::make_index_sequence< sizeof...( _paramsTy ) >{} );
 	}
 
 private:
 	typedef binderoo::ImportedFunction< binderoo::FunctionTraits< void(*)(_paramsTy...) > > ImportedFunc;
 
 	template< size_t... Ints >
-	static void callInternal( const char* pFunctionName, ParamHandler& parameters, std::index_sequence< Ints... >&& /**/ )
+	static void callInternal( const char* pFunctionName, const char* pFunctionSignature, ParamHandler& parameters, std::index_sequence< Ints... >&& /**/ )
 	{
-		ImportedFunc importedFunction( pFunctionName );
+		ImportedFunc importedFunction( pFunctionName, pFunctionSignature );
 		importedFunction( parameters.getParam< _paramsTy >( Ints )... );
 	}
 };
