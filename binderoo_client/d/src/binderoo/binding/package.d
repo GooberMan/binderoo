@@ -1443,12 +1443,16 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		string[] lines;
 
 		lines ~= strObjTabs ~ "// Function " ~ cast(string)func.strFunctionName;
-		//lines ~= strObjTabs ~ "// Signature " ~ cast(string)func.strFunctionSignature;
+		lines ~= strObjTabs ~ "// Signature " ~ cast(string)func.strFunctionSignature;
 		//lines ~= strObjTabs ~ "// Base prototype " ~ func.CSharpPrototype();
 		//lines ~= strObjTabs ~ "// Marshalled prototype " ~ func.CSharpMarshalledPrototype();
 		//lines ~= strObjTabs ~ "// Parameter types " ~ func.CSharpParameterTypes().joinWith( ", " );
 		//lines ~= strObjTabs ~ "// Marshalled parameter types " ~ func.CSharpMarshalledParameterTypes().joinWith( ", " );
 		lines ~= strObjTabs ~ "public static ImportedFunction " ~ strImportedFuncVarName ~ ";";
+		if( strReturnType == "bool" )
+		{
+			lines ~= strObjTabs ~ "[return:MarshalAs(UnmanagedType.I1)]";
+		}
 		lines ~= strObjTabs ~ "public delegate " ~ strReturnType ~ " " ~ strDelegateType ~ strParameters ~ ";";
 		lines ~= strObjTabs ~ "public static " ~ strDelegateType ~ " " ~ strPropertyName;
 		lines ~= strObjTabs ~ "{ get {";
