@@ -114,9 +114,9 @@ struct BoundObjectFunctions( Type )
 	{
 		enum TypeVal = cast( BoundObject.Type )( BoundObject.Type.Reference | Instanced );
 		enum TypeSize = __traits( classInstanceSize, Type );
-		static if ( is( Type BT == super ) && !is( BT[ 0 ] == Object ) )
+		static if ( is( Type BT == super ) && BT.length > 0 && !is( BT[ 0 ] == Object ) )
 		{
-			alias BaseType = BT;
+			alias BaseType = BT[ 0 ];
 		}
 		else
 		{
@@ -337,7 +337,7 @@ struct BoundObjectFunctions( Type )
 					{
 						strProperties ~= "\tpublic " ~ CSharpFullTypeString!( typeof( var ) ) ~ " " ~ __traits( identifier, var );
 						strProperties ~= "\t{";
-						static if( is( typeof( var ) == string ) )
+						static if( is( typeof( var ) == string ) || is( typeof( var ) == const(char)[] ) )
 						{
 							strProperties ~= "\t\tget { return new SliceString( var_" ~ __traits( identifier, var ) ~ " ).Data; }";
 							static if( IsMutable!( typeof( var ) ) ) strProperties ~= "\t\t// Setter coming soon...";

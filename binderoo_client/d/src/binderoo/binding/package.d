@@ -1557,11 +1557,17 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			strParameterNames = [ "pObj.Ptr" ];
 		}
 
+		import std.string : lastIndexOf;
+		string[] lines;
+		string strObjTabs = generateTabs( depth );
+		string strContentTabs = strObjTabs ~ '\t';
+
 		string strPrototype;
 		string strReturnType;
 		if( property.Getter !is null )
 		{
 			strPrototype = property.Getter.CSharpPrototype();
+			strReturnType =  property.Getter.CSharpReturnType();
 		}
 		else
 		{
@@ -1569,17 +1575,8 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			strReturnType = property.Setter.CSharpReturnType();
 		}
 
-		import std.string : lastIndexOf;
 		ptrdiff_t FoundName = strPrototype.lastIndexOf( property.Name );
 		strPrototype = strPrototype[ 0 .. FoundName + property.Name.length ];
-
-		// TODO: HACK BECAUSE I CANT WORK OUT WHY
-		strReturnType = strPrototype[ 0 .. FoundName - 1 ];
-
-		string[] lines;
-
-		string strObjTabs = generateTabs( depth );
-		string strContentTabs = strObjTabs ~ '\t';
 
 		enum strAccessibility = "public ";
 

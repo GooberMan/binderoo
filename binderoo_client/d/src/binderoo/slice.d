@@ -31,7 +31,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module binderoo.slice;
 //----------------------------------------------------------------------------
 
-public import binderoo.typedescriptor;
+import binderoo.traits	: IsConst
+						, IsImmutable
+						, IsNonAssociativeArray
+						, ArrayValueType;
+
+import binderoo.typedescriptor : CTypeName;
 
 @CTypeName( "binderoo::Slice", "binderoo/slice.h" )
 struct Slice( Type )
@@ -63,6 +68,7 @@ struct Slice( Type )
 //----------------------------------------------------------------------------
 
 alias DString = Slice!( immutable( char ) );
+alias CPPString = Slice!( const( char ) );
 //----------------------------------------------------------------------------
 
 template SliceOf( OriginalType )
