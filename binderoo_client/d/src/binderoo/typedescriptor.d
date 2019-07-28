@@ -389,6 +389,7 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 		enum String( alias T ) = CSharpTypeString!( T, stage );
 		enum SymbolOverride OverrideString( T ) = { false, T.stringof };
 		enum SymbolOverride OverrideString( T : string ) = { true, stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "SliceString" : "string" };
+		enum SymbolOverride OverrideString( T : const(char)[] ) = { true, stage == MarshallingStage.Marshalled ? "SliceData" : stage == MarshallingStage.Intermediary ? "SliceString" : "string" };
 		enum ArrayOpen = "[";
 		enum ArrayClose = "]";
 		enum StaticArray( size_t Length ) = ArrayOpen ~ ArrayClose;
@@ -403,7 +404,7 @@ template CSharpFullTypeString( T, MarshallingStage stage = MarshallingStage.Unma
 
 	static if( IsNonAssociativeArray!T && stage != MarshallingStage.Unmarshalled )
 	{
-		enum CSharpFullTypeString = stage == MarshallingStage.Marshalled ? "SliceData" : ( is( T == string ) ? "SliceString" : "Slice< " ~ CSharpFullTypeString!( ArrayValueType!T ) ~ " >" );
+		enum CSharpFullTypeString = stage == MarshallingStage.Marshalled ? "SliceData" : ( is( T == string ) || is( T == const(char)[] ) ? "SliceString" : "Slice< " ~ CSharpFullTypeString!( ArrayValueType!T ) ~ " >" );
 	}
 	else static if( IsPointer!T && IsUserType!( T ) )
 	{
@@ -453,7 +454,11 @@ struct TypeString( T, bool bIsRef = false )
 	{
 		enum ShouldReplaceWithPtr = stage == MarshallingStage.Marshalled && is( T == class );
 
-		static if( ( IsConst!( T ) || IsImmutable!( T ) )
+		static if( is( T == string ) || is( T == const(char)[] ) )
+		{
+			return ( bIsRef ? "ref " : "" ) ~ CSharpFullTypeString!( T, stage );
+		}
+		else static if( ( IsConst!( T ) || IsImmutable!( T ) )
 					&& bIsRef )
 		{
 			//return "in " ~ ( ShouldReplaceWithPtr ? "IntPtr" : CSharpFullTypeString!( Unqualified!( T ), stage ) );
