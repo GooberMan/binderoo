@@ -81,10 +81,28 @@ namespace binderoo
 
 		public T[] Data< T >()
 		{
-			int dataSize = DataSizeInBytes< T >();
-			T[] data = new T[ Length ];
-			Util.Copy( data, Pointer );
-			return data;
+			if( typeof( T ) == typeof( string ) )
+			{
+				T[] output = new T[ Length ];
+				for( ulong curr = 0; curr < uLength; ++curr )
+				{
+					IntPtr sliceLengthOffset = (IntPtr)( pData.ToInt64() + (long)curr * 16 );
+					ulong sliceLength = (ulong)Marshal.ReadInt64( sliceLengthOffset );
+					IntPtr sliceOffset = (IntPtr)( pData.ToInt64() + (long)curr * 16 + 8 );
+					IntPtr slice = Marshal.ReadIntPtr( sliceOffset );
+
+					SliceData newData = new SliceData{ pData = slice, uLength = sliceLength };
+					output[ curr ] = (T)Convert.ChangeType( new SliceString( newData ).Data, typeof( T ) );
+				}
+
+				return output;
+			}
+			else
+			{
+				T[] data = new T[ Length ];
+				Util.Copy( data, Pointer );
+				return data;
+			}
 		}
 
 		public int DataSizeInBytes< T >()
@@ -202,10 +220,25 @@ namespace binderoo
 				Dispose();
 				if( value.Length > 0 )
 				{
-					int dataSize = value.Length * Marshal.SizeOf( typeof( T ) );
-					IntPtr ptr = Marshal.AllocHGlobal( dataSize );
-					Util.Copy( ptr, value );
-					sliceWrapper.Set( ptr, (ulong)value.Length, true );
+					if( typeof( T ) == typeof( string ) )
+					{
+						int dataSize = value.Length * Marshal.SizeOf( SliceData );
+						SliceData[] data = new SliceData[ value.Length ];
+						for( int index = 0; index < value.Length; ++index )
+						{
+							data[ index ] = new SliceString( (string)Convert.ChangeType( value[ index ], typeof( string ) ) ).SliceData;
+						}
+						IntPtr ptr = Marshal.AllocHGlobal( dataSize );
+						Util.Copy( ptr, data );
+						sliceWrapper.Set( ptr, (ulong)value.Length, true );
+					}
+					else
+					{
+						int dataSize = value.Length * Marshal.SizeOf( typeof( T ) );
+						IntPtr ptr = Marshal.AllocHGlobal( dataSize );
+						Util.Copy( ptr, value );
+						sliceWrapper.Set( ptr, (ulong)value.Length, true );
+					}
 				}
 			}
 		}
