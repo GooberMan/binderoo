@@ -64,6 +64,7 @@ namespace binderoo
 		BIND_INLINE ~ScopeLock()
 		{
 			lock( false );
+			_mm_mfence();
 		}
 
 	private:
