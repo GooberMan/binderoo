@@ -343,9 +343,9 @@ namespace binderoo
 		HostBoundObjectVector		vecBoundObjects;
 
 		ImportedFunctionVector		vecImportFunctionInstances;
-		std::atomic< bool >			lockImportFunctionInstances;
+		std::atomic< int32_t >		lockImportFunctionInstances;
 		ImportedObjectVector		vecImportClassInstances;
-		std::atomic< bool >			lockImportClassInstances;
+		std::atomic< int32_t >		lockImportClassInstances;
 
 		bool						bReloadLibs;
 		bool						bInRapidIterationMode;

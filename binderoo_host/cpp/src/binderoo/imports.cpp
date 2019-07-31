@@ -90,13 +90,13 @@ struct Host_Class_C
 
 typedef std::map< InternalString, Host_Function_C*, std::less< InternalString > > FunctionMap;
 static FunctionMap s_functions;
-static std::atomic< bool > s_rawFunctionsLock;
+static std::atomic< int32_t > s_rawFunctionsLock;
 
 typedef std::map< void*, Host_Class_C* > RawObjectMap;
 typedef std::vector< Host_Class_C* > ErasedObjectsList;
 static RawObjectMap s_rawObjects;
 static ErasedObjectsList s_erasedObjects;
-static std::atomic< bool > s_rawObjectsLock;
+static std::atomic< int32_t > s_rawObjectsLock;
 //----------------------------------------------------------------------------
 
 binderoo_imported_function_t binderoo_host_create_imported_function( const char* pName, const char* pSignature )

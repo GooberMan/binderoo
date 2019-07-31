@@ -55,27 +55,26 @@ namespace binderoo
 
 	struct ScopeLock
 	{
-		BIND_INLINE ScopeLock( std::atomic< bool >& val )
+		BIND_INLINE ScopeLock( std::atomic< int32_t >& val )
 			: toLock( val )
 		{
-			lock( true );
+			lock( 1, 0 );
 		}
 
 		BIND_INLINE ~ScopeLock()
 		{
-			lock( false );
+			lock( 0, 1 );
 			_mm_mfence();
 		}
 
 	private:
-		BIND_INLINE void lock( bool bLock )
+		BIND_INLINE void lock( int32_t bLock, int32_t bExpected )
 		{
-			bool expected = !bLock;
-			while( toLock.compare_exchange_weak( expected, bLock ) ) { }
+			while( !toLock.compare_exchange_strong( bExpected, bLock ) ) { }
 		}
 		//--------------------------------------------------------------------
 
-		std::atomic< bool >& toLock;
+		std::atomic< int32_t >& toLock;
 	};
 	//------------------------------------------------------------------------
 
