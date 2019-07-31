@@ -65,29 +65,6 @@ namespace binderoo
 }
 //----------------------------------------------------------------------------
 
-BIND_INLINE void lock( std::atomic< bool >& val, bool bLock )
-{
-	bool expected = !bLock;
-	while( val.compare_exchange_weak( expected, bLock ) ) { }
-}
-//----------------------------------------------------------------------------
-
-struct ScopeLock
-{
-	ScopeLock( std::atomic< bool >& val )
-		: toLock( val )
-	{
-		lock( toLock, true );
-	}
-
-	~ScopeLock()
-	{
-		lock( toLock, false );
-	}
-
-	std::atomic< bool >& toLock;
-};
-
 BIND_C_API_BEGIN
 
 typedef binderoo::Containers< binderoo::AllocatorSpace::Host >::InternalString InternalString;
@@ -98,7 +75,7 @@ struct Host_Function_C
 	InternalString										m_strSignature;
 	InternalString										m_strLookupName;
 	binderoo::ImportedFunction< void >*					m_pFunc;
-	std::atomic< size_t >								m_uRefCount;
+	std::atomic< ptrdiff_t >							m_uRefCount;
 };
 //----------------------------------------------------------------------------
 
@@ -107,7 +84,7 @@ struct Host_Class_C
 	InternalString										m_strName;
 	binderoo::RefCountedImportedClassInstance< void > 	m_pObj;
 	bool												m_bRegistered;
-	std::atomic< size_t >								m_iOwnRefCount;
+	std::atomic< ptrdiff_t >							m_iOwnRefCount;
 };
 //----------------------------------------------------------------------------
 
@@ -116,7 +93,9 @@ static FunctionMap s_functions;
 static std::atomic< bool > s_rawFunctionsLock;
 
 typedef std::map< void*, Host_Class_C* > RawObjectMap;
+typedef std::vector< Host_Class_C* > ErasedObjectsList;
 static RawObjectMap s_rawObjects;
+static ErasedObjectsList s_erasedObjects;
 static std::atomic< bool > s_rawObjectsLock;
 //----------------------------------------------------------------------------
 
@@ -128,7 +107,7 @@ binderoo_imported_function_t binderoo_host_create_imported_function( const char*
 	strLookupName += "_";
 	strLookupName += strSignature;
 
-	ScopeLock lock( s_rawFunctionsLock );
+	binderoo::ScopeLock lock( s_rawFunctionsLock );
 
 	auto found = s_functions.find( strLookupName );
 	if( found != s_functions.end() )
@@ -148,7 +127,7 @@ void binderoo_host_destroy_imported_function( binderoo_imported_function_t pFunc
 {
 	Host_Function_C* pThisFunc = (Host_Function_C*)pFunc;
 
-	ScopeLock lock( s_rawFunctionsLock );
+	binderoo::ScopeLock lock( s_rawFunctionsLock );
 
 	auto found = s_functions.find( pThisFunc->m_strLookupName );
 	if( --found->second->m_uRefCount == 0 )
@@ -170,14 +149,15 @@ binderoo_func_ptr_t binderoo_host_get_function_ptr( binderoo_imported_function_t
 
 binderoo_imported_class_t binderoo_host_create_imported_class( const char* pName )
 {
+	Host_Class_C* pNewClass = new Host_Class_C { pName, binderoo::RefCountedImportedClassInstance< void >(), false, 1 };
+
 	InternalString strName( pName );
 
-	Host_Class_C* pNewClass = new Host_Class_C { pName, binderoo::RefCountedImportedClassInstance< void >(), false, 1 };
 	pNewClass->m_pObj.createNewInstance( strName.c_str() );
 
 	{
-		ScopeLock lock( s_rawObjectsLock );
-		s_rawObjects[ pNewClass->m_pObj.get() ] = pNewClass;
+		binderoo::ScopeLock lock( s_rawObjectsLock );
+		s_rawObjects.insert( RawObjectMap::value_type( pNewClass->m_pObj.get(), pNewClass ) );
 	}
 
 	return pNewClass;
@@ -186,15 +166,15 @@ binderoo_imported_class_t binderoo_host_create_imported_class( const char* pName
 
 binderoo_imported_class_t binderoo_host_register_imported_class( void* pObj, const char* pClassName )
 {
-	ScopeLock lock( s_rawObjectsLock );
+	binderoo::ScopeLock lock( s_rawObjectsLock );
 
 	auto found = s_rawObjects.find( pObj );
 	if( found == s_rawObjects.end() )
 	{
-		Host_Class_C* pNewClass = new Host_Class_C { "Raw object", binderoo::RefCountedImportedClassInstance< void >(), true, 1 };
-		pNewClass->m_pObj.registerRawInstance( pObj, pClassName );
+		Host_Class_C* pNewClass = new Host_Class_C { pClassName, binderoo::RefCountedImportedClassInstance< void >(), true, 1 };
+		pNewClass->m_pObj.registerRawInstance( pObj, pNewClass->m_strName.c_str() );
 
-		s_rawObjects[ pObj ] = pNewClass;
+		s_rawObjects.insert( RawObjectMap::value_type( pObj, pNewClass ) );
 
 		return pNewClass;
 	}
@@ -209,10 +189,10 @@ binderoo_imported_class_t binderoo_host_register_imported_class( void* pObj, con
 
 void binderoo_host_addref_imported_class( binderoo_imported_class_t pClass )
 {
-	Host_Class_C* cClass = (Host_Class_C*)pClass;
+	binderoo::ScopeLock lock( s_rawObjectsLock );
 
+	Host_Class_C* cClass = (Host_Class_C*)pClass;
 	{
-		ScopeLock lock( s_rawObjectsLock );
 		cClass->m_pObj.addReferenceInstance();
 	}
 
@@ -222,6 +202,8 @@ void binderoo_host_addref_imported_class( binderoo_imported_class_t pClass )
 
 void binderoo_host_release_imported_class( binderoo_imported_class_t pClass )
 {
+	binderoo::ScopeLock lock( s_rawObjectsLock );
+
 	Host_Class_C* cClass = (Host_Class_C*)pClass;
 
 	if( cClass->m_iOwnRefCount.load() <= 0 )
@@ -232,12 +214,15 @@ void binderoo_host_release_imported_class( binderoo_imported_class_t pClass )
 	cClass->m_iOwnRefCount--;
 	void* pObjPtr = ((Host_Class_C*)pClass)->m_pObj.get();
 
-	ScopeLock lock( s_rawObjectsLock );
 	if( ((Host_Class_C*)pClass)->m_pObj.releaseInstance() == 0 )
 	{
-		//auto found = s_rawObjects.find( pObjPtr );
-		//s_rawObjects.erase( found );
-		//
+		auto found = s_rawObjects.find( pObjPtr );
+		if( found != s_rawObjects.end() )
+		{
+			s_rawObjects.erase( found );
+		}
+		
+		s_erasedObjects.push_back( cClass );
 		//delete (Host_Class_C*)pClass;
 	}
 }

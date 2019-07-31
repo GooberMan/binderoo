@@ -614,7 +614,9 @@ template IsModule( alias Symbol )
 	else
 	{
 		import std.algorithm.searching : startsWith;
-		enum IsModule = Symbol.stringof.startsWith( "module " );
+		enum SymbolName = Symbol.stringof;
+
+		enum IsModule = startsWith( SymbolName, "module " );
 	}
 }
 //----------------------------------------------------------------------------

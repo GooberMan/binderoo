@@ -80,10 +80,11 @@ namespace binderoo
 		friend class binderoo::HostImplementation;
 
 	protected:
-		BIND_INLINE ImportedBase( void* pInstance, void* pDescriptor, const char* pClassTypeName, int32_t refcount, int32_t flags )
+		BIND_INLINE ImportedBase( void* pInstance, void* pDescriptor, const char* pClassTypeName, const char* pIdentity, int32_t refcount, int32_t flags )
 			: pObjectInstance( pInstance )
 			, pObjectDescriptor( pDescriptor )
 			, pSymbol( pClassTypeName )
+			, pSymbolIdent( pIdentity )
 			, iRefCount( refcount )
 			, eFlags( flags )
 		{
@@ -137,8 +138,12 @@ namespace binderoo
 		BIND_INLINE ImportedClassInstance( ImportedClassInstance&& otherInst )
 			: ImportedBase( otherInst.pObjectInstance, otherInst.pObjectDescriptor, otherInst.pSymbol, otherInst.iRefCount, otherInst.eFlags )
 		{
+			Host::getActiveHost()->deregisterImportedClassInstance( &otherInst );
+			
 			otherInst.pObjectInstance = nullptr;
 			otherInst.pObjectDescriptor = nullptr;
+			otherInst.pSymbol = nullptr;
+			otherInst.pSymbolIdent = nullptr;
 			otherInst.iRefCount = 0;
 			otherInst.eFlags = 0;
 
@@ -152,11 +157,14 @@ namespace binderoo
 
 		BIND_INLINE ImportedClassInstance& operator=( ImportedClassInstance&& otherInst )
 		{
+			Host::getActiveHost()->deregisterImportedClassInstance( &otherInst );
+
 			deinstantiate();
 
 			pObjectInstance = otherInst.pObjectInstance;
 			pObjectDescriptor = otherInst.pObjectDescriptor;
 			pSymbol = otherInst.pSymbol;
+			pSymbolIdent = otherInst.pSymbolIdent;
 			iRefCount = otherInst.iRefCount;
 			eFlags = otherInst.eFlags;
 

@@ -1682,8 +1682,8 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 			lines ~= strSeparator;
 			lines ~= Blank;
 			lines ~= strObjTabs ~ "public " ~ obj.strName ~ "( IntPtr pInstance, string strClass )";
+			lines ~= strObjTabs ~ "\t: base( pInstance, strClass )";
 			lines ~= strObjTabs ~ "{";
-			lines ~= strObjTabs ~ "\tpObj = new ImportedClass( pInstance, strClass );";
 			lines ~= strObjTabs ~ "}";
 			lines ~= strSeparator;
 			lines ~= Blank;

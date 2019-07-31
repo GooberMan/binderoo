@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 //----------------------------------------------------------------------------
 
 namespace binderoo
@@ -37,7 +38,8 @@ namespace binderoo
 	{
 		public ImportedClass( string strClassName )
 		{
-			m_pObj = binderoo_host_create_imported_class( strClassName );
+			MarshalClassName( strClassName );
+			m_pObj = binderoo_host_create_imported_class( m_pClassNameMarshalled );
 			m_pInstance = binderoo_host_get_class_ptr( m_pObj );
 			m_strClassName = strClassName;
 			m_bCreatedNew = true;
@@ -46,7 +48,9 @@ namespace binderoo
 
 		public ImportedClass( IntPtr instance, string strClassName )
 		{
-			m_pObj = binderoo_host_register_imported_class( instance, strClassName );
+			MarshalClassName( strClassName );
+			m_pObj = binderoo_host_register_imported_class( instance, m_pClassNameMarshalled );
+
 			m_pInstance = instance;
 			m_strClassName = strClassName;
 			m_bCreatedNew = false;
@@ -63,13 +67,13 @@ namespace binderoo
 #region InternalMagic
 		[ DllImport( "binderoo_host", CallingConvention = CallingConvention.Cdecl ) ]
 		extern static private IntPtr binderoo_host_create_imported_class(
-			[ MarshalAs( UnmanagedType.LPStr ) ] string pName );
+			IntPtr pName );
 		//--------------------------------------------------------------------
 
 		[ DllImport( "binderoo_host", CallingConvention = CallingConvention.Cdecl ) ]
 		extern static private IntPtr binderoo_host_register_imported_class(
 			IntPtr pObj,
-			[ MarshalAs( UnmanagedType.LPStr ) ] string pClassName );
+			IntPtr pClassName );
 		//--------------------------------------------------------------------
 
 		[ DllImport( "binderoo_host", CallingConvention = CallingConvention.Cdecl ) ]
@@ -97,12 +101,28 @@ namespace binderoo
 				binderoo_host_release_imported_class( m_pObj );
 				m_pObj = IntPtr.Zero;
 			}
+
+			if( m_pClassNameMarshalled != IntPtr.Zero )
+			{
+				Marshal.FreeHGlobal( m_pClassNameMarshalled );
+				m_pClassNameMarshalled = IntPtr.Zero;
+			}
+		}
+		//--------------------------------------------------------------------
+
+		private void MarshalClassName( string strName )
+		{
+			byte[] bytes = Encoding.UTF8.GetBytes( strName );
+			m_pClassNameMarshalled = Marshal.AllocHGlobal( bytes.Length + 1 );
+			Marshal.Copy( bytes, 0, m_pClassNameMarshalled, bytes.Length );
+			Marshal.WriteByte( m_pClassNameMarshalled + bytes.Length, 0 );
 		}
 		//--------------------------------------------------------------------
 
 		private IntPtr		m_pObj;
 		private IntPtr		m_pInstance;
 		private string		m_strClassName;
+		private IntPtr		m_pClassNameMarshalled;
 		private bool		m_bCreatedNew;
 
 #endregion

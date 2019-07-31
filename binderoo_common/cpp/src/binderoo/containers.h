@@ -39,6 +39,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include <algorithm>
+#include <atomic>
 
 namespace binderoo
 {
@@ -51,6 +52,32 @@ namespace binderoo
 		typedef std::vector< char, binderoo::Allocator< eSpace, char > >											CharVector;
 	};
 	//------------------------------------------------------------------------
+
+	struct ScopeLock
+	{
+		BIND_INLINE ScopeLock( std::atomic< bool >& val )
+			: toLock( val )
+		{
+			lock( true );
+		}
+
+		BIND_INLINE ~ScopeLock()
+		{
+			lock( false );
+		}
+
+	private:
+		BIND_INLINE void lock( bool bLock )
+		{
+			bool expected = !bLock;
+			while( toLock.compare_exchange_weak( expected, bLock ) ) { }
+		}
+		//--------------------------------------------------------------------
+
+		std::atomic< bool >& toLock;
+	};
+	//------------------------------------------------------------------------
+
 }
 
 #endif // !defined( _BINDEROO_CONTAINERS_H_ )

@@ -42,6 +42,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <atomic>
 
 #include <string.h>
 
@@ -85,192 +86,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 	#define BINDEROOHOST_RAPIDITERATION 0
 #endif // SYSAPI check
-
-namespace troo
-{
-	enum class Stuff : short
-	{
-		Foo,
-		Bar
-	};
-}
-
-namespace lulz
-{
-	namespace lulz
-	{
-		namespace lulz
-		{
-			void BIND_DLL lulz()
-			{
-			}
-		}
-	}
-}
-
-struct BIND_DLL TestForKek
-{
-
-	int val;
-	bool aFunc() const { return val != 0; }
-};
-
-namespace dcalculator
-{
-	enum class TryHard : int
-	{
-		Try,
-		Hard
-	};
-
-	enum class HardTry : int
-	{
-		Hard,
-		Try
-	};
-
-	TryHard BIND_DLL doATryHardPointer( TryHard* p1, TryHard* p2, TryHard* p3, TryHard* p4, TryHard* p5, TryHard* p6, TryHard* p7, TryHard* p8 )
-	{
-		return TryHard::Hard;
-	}
-
-	TryHard BIND_DLL doATryHard( TryHard p1, TryHard p2, HardTry p3, int p4, float p5, HardTry p6, TryHard* p7, HardTry*& p8 )
-	{
-		return TryHard::Hard;
-	}
-
-	bool BIND_DLL ExampleFunction (int*a, int b, int c, int*d, bool e, bool f, bool*g)
-	{
-		return false;
-	}
-
-	namespace calcman
-	{
-		struct BIND_DLL Test
-		{
-		public: bool foo() { val = 4; return false; }
-		protected: void bar() { val = 3; }
-		public: bool neitherFooNorBar() const { return false; }
-		public: static bool neitherBarNorFoo() { return false; }
-			int val;
-		};
-	}
-
-	calcman::Test BIND_DLL doAnIntyIntThing( int foo, int bar, int kek, calcman::Test& testes, float floatFoo, float floatBar, float floatKek )
-	{
-		testes.val = (int)( floatBar * foo );
-		return testes;
-	}
-
-	struct BIND_DLL Kek
-	{
-		template< typename _Ty >
-		static bool BIND_DLL doAKek( _Ty* pThing )
-		{
-			return pThing->aFunc() ? bVal : false;
-		}
-
-		template< typename _Ty, typename _Ty2, typename _Ty3 >
-		bool BIND_DLL doANonStaticKek( _Ty pThing )
-		{
-			return pThing->aFunc() ? bVal : false;
-		}
-
-		static const bool bVal = false;
-	};
-
-	bool BIND_DLL doAKek()
-	{
-		TestForKek test;
-		return Kek::doAKek( &test );
-	}
-
-	void BIND_DLL *doAForceAKek()
-	{
-		typedef bool (* KekFunc)( TestForKek* );
-		KekFunc func = &Kek::doAKek< TestForKek >;
-
-		void** retFunc = reinterpret_cast<void**>(&func);
-
-		return *retFunc;
-	}
-
-	void BIND_DLL *doAForceANonStaticKek()
-	{
-		typedef bool (Kek::* KekFunc)( TestForKek* );
-		KekFunc func = &Kek::doANonStaticKek< TestForKek*, TestForKek*, TestForKek* >;
-
-		void** retFunc = reinterpret_cast<void**>(&func);
-
-		return *retFunc;
-	}
-}
-//------------------------------------------------------------------------
-
-
-namespace kek
-{
-	enum class Something : short
-	{
-		Foo,
-		Bar
-	};
-	//------------------------------------------------------------------------
-
-	troo::Stuff BIND_DLL doATrooStuffThing( int& foo )
-	{
-		return troo::Stuff::Foo;
-	}
-	//------------------------------------------------------------------------
-
-	const dcalculator::calcman::Test BIND_DLL doAGetATestAThingAMaThingyThing()
-	{
-		return dcalculator::calcman::Test();
-	}
-
-	Something BIND_DLL doASomethingThing( int**** foo )
-	{
-		return Something::Foo;
-	}
-	//------------------------------------------------------------------------
-
-	Something BIND_DLL doADifferentSomething( Something p1, Something p2, int p3, int p4, Something p5, Something& p6, Something*& p7 )
-	{
-		return Something::Bar;
-	}
-
-	bool BIND_DLL doAPointerRefThing( int*& foo )
-	{
-		return dcalculator::calcman::Test().foo();
-	}
-	//------------------------------------------------------------------------
-
-	bool BIND_DLL doADoublePointerThing( int** foo )
-	{
-		return false;
-	}
-	//------------------------------------------------------------------------
-
-	const char BIND_DLL *doAThing( int foo )
-	{
-		return nullptr;
-	}
-	//------------------------------------------------------------------------
-
-	bool BIND_DLL doAThing( int foo, float bar )
-	{
-		return false;
-	}
-	//------------------------------------------------------------------------
-
-	void BIND_DLL doNoThing( int foo, float bar )
-	{
-		//
-	}
-	//------------------------------------------------------------------------
-}
-
-//----------------------------------------------------------------------------
 
 template<>
 binderoo::AllocatorFunc				binderoo::AllocatorFunctions< binderoo::AllocatorSpace::Host >::fAlloc		= nullptr;
@@ -414,13 +229,21 @@ namespace binderoo
 			: pInstance( nullptr )
 			, m_bHadInstance( false )
 		{
+			_mm_mfence();
 		}
 		//--------------------------------------------------------------------
+
+		~HostImportedObjectInstance()
+		{
+			_mm_mfence();
+			//OutputDebugString( "There's a timing issue here somewhere in binderoo...\n" );
+		}
 
 		BIND_INLINE bool operator==( const ImportedBase* pRHS ) const			{ return pInstance == pRHS; }
 		//--------------------------------------------------------------------
 
-		InternalString									strReloadData;
+		//InternalString									strReloadData;
+		//InternalString									strClass;
 		ImportedBase*									pInstance;
 		bool											m_bHadInstance;
 	};
@@ -520,7 +343,9 @@ namespace binderoo
 		HostBoundObjectVector		vecBoundObjects;
 
 		ImportedFunctionVector		vecImportFunctionInstances;
+		std::atomic< bool >			lockImportFunctionInstances;
 		ImportedObjectVector		vecImportClassInstances;
+		std::atomic< bool >			lockImportClassInstances;
 
 		bool						bReloadLibs;
 		bool						bInRapidIterationMode;
@@ -654,6 +479,9 @@ binderoo::HostImplementation::HostImplementation( HostConfiguration& config )
 	, bInRapidIterationMode( config.bStartInRapidIterationMode )
 	, bReloadLibs( false )
 {
+	// HACK: Reserving so that we don't have to do a resize...
+	vecBoundFunctions.reserve( 8192 );
+	vecBoundObjects.reserve( 65536 );
 	collectExports();
 
 	performLoad();
@@ -705,6 +533,7 @@ void binderoo::HostImplementation::performReloads()
 
 void binderoo::HostImplementation::saveObjectData()
 {
+	/*binderoo::ScopeLock lock( lockImportClassInstances );
 	for( HostImportedObjectInstance& obj : vecImportClassInstances )
 	{
 		if( obj.pInstance->pObjectInstance )
@@ -719,12 +548,13 @@ void binderoo::HostImplementation::saveObjectData()
 			obj.strReloadData.clear();
 			obj.m_bHadInstance = false;
 		}
-	}
+	}*/
 }
 //----------------------------------------------------------------------------
 
 void binderoo::HostImplementation::loadObjectData()
 {
+	/*binderoo::ScopeLock lock( lockImportClassInstances );
 	for( HostImportedObjectInstance& obj : vecImportClassInstances )
 	{
 		if( obj.m_bHadInstance )
@@ -734,7 +564,7 @@ void binderoo::HostImplementation::loadObjectData()
 			obj.strReloadData.clear();
 			obj.m_bHadInstance = false;
 		}
-	}
+	}*/
 }
 //----------------------------------------------------------------------------
 
@@ -768,48 +598,61 @@ void binderoo::HostImplementation::performUnload()
 
 void binderoo::HostImplementation::destroyImportedObjects()
 {
-	for( HostImportedObjectInstance& obj : vecImportClassInstances )
 	{
-		if( obj.pInstance->pObjectInstance )
+		binderoo::ScopeLock lock( lockImportClassInstances );
+		for( HostImportedObjectInstance& obj : vecImportClassInstances )
 		{
-			const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor.load();
-			pObjDescriptor->pObject->free( obj.pInstance->pObjectInstance );
-			obj.pInstance->pObjectInstance = nullptr;
-		}
+			if( obj.pInstance->pObjectInstance )
+			{
+				const HostBoundObject* pObjDescriptor = (const HostBoundObject*)obj.pInstance->pObjectDescriptor.load();
+				pObjDescriptor->pObject->free( obj.pInstance->pObjectInstance );
+				obj.pInstance->pObjectInstance = nullptr;
+			}
 
-		obj.pInstance->pObjectDescriptor = nullptr;
+			obj.pInstance->pObjectDescriptor = nullptr;
+		}
 	}
 
-	for( binderoo::ImportedBase*& pImportedFunction : vecImportFunctionInstances )
+	binderoo::ScopeLock lock( lockImportFunctionInstances );
 	{
-		pImportedFunction->pObjectDescriptor = nullptr;
-		pImportedFunction->pObjectInstance = nullptr;
+		for( binderoo::ImportedBase*& pImportedFunction : vecImportFunctionInstances )
+		{
+			pImportedFunction->pObjectDescriptor = nullptr;
+			pImportedFunction->pObjectInstance = nullptr;
+		}
 	}
 }
 //----------------------------------------------------------------------------
 
 void binderoo::HostImplementation::recreateImportedObjects()
 {
-	for( binderoo::ImportedBase*& pImportedFunction : vecImportFunctionInstances )
 	{
-		const HostBoundFunction* pFunction = getImportedFunctionDetails( pImportedFunction->pSymbol, pImportedFunction->pSymbolIdent );
+		binderoo::ScopeLock lock( lockImportFunctionInstances );
 
-		if( pFunction )
+		for( binderoo::ImportedBase*& pImportedFunction : vecImportFunctionInstances )
 		{
-			pImportedFunction->pObjectInstance		= (void*)pFunction->pObject->pFunctionCPPDecl;
-			pImportedFunction->pObjectDescriptor	= (void*)pFunction;
+			const HostBoundFunction* pFunction = getImportedFunctionDetails( pImportedFunction->pSymbol, pImportedFunction->pSymbolIdent );
+
+			if( pFunction )
+			{
+				pImportedFunction->pObjectInstance		= (void*)pFunction->pObject->pFunctionCPPDecl;
+				pImportedFunction->pObjectDescriptor	= (void*)pFunction;
+			}
 		}
 	}
 
-	for( HostImportedObjectInstance& obj : vecImportClassInstances )
 	{
-		const HostBoundObject* pObject = getImportedObjectDetails( obj.pInstance->pSymbol );
-		if( pObject )
+		binderoo::ScopeLock lock( lockImportClassInstances );
+		for( HostImportedObjectInstance& obj : vecImportClassInstances )
 		{
-			obj.pInstance->pObjectDescriptor = (void*)pObject;
-			if( obj.m_bHadInstance )
+			const HostBoundObject* pObject = getImportedObjectDetails( obj.pInstance->pSymbol );
+			if( pObject )
 			{
-				obj.pInstance->pObjectInstance = pObject->pObject->alloc( 1 );
+				obj.pInstance->pObjectDescriptor = (void*)pObject;
+				if( obj.m_bHadInstance )
+				{
+					obj.pInstance->pObjectInstance = pObject->pObject->alloc( 1 );
+				}
 			}
 		}
 	}
@@ -1266,13 +1109,17 @@ void binderoo::HostImplementation::registerImportedClassInstance( binderoo::Impo
 
 	HostImportedObjectInstance objInstance;
 	objInstance.pInstance = pInstance;
+	//objInstance.strClass = pInstance->pSymbol;
 
+	binderoo::ScopeLock lock( lockImportClassInstances );
 	vecImportClassInstances.push_back( objInstance );
 }
 //----------------------------------------------------------------------------
 
 void binderoo::HostImplementation::deregisterImportedClassInstance( binderoo::ImportedBase* pInstance )
 {
+	binderoo::ScopeLock lock( lockImportClassInstances );
+
 	// VS2012 was having issues with std::find and a lambda, so the comparison is in the type now...
 	auto found = std::find( vecImportClassInstances.begin(), vecImportClassInstances.end(), pInstance );
 
@@ -1295,12 +1142,15 @@ void binderoo::HostImplementation::registerImportedFunction( binderoo::ImportedB
 		pInstance->pObjectDescriptor	= (void*)pFunction;
 	}
 
+	binderoo::ScopeLock lock( lockImportFunctionInstances );
 	vecImportFunctionInstances.push_back( pInstance );
 }
 //----------------------------------------------------------------------------
 
 void binderoo::HostImplementation::deregisterImportedFunction( binderoo::ImportedBase* pInstance )
 {
+	binderoo::ScopeLock lock( lockImportClassInstances );
+
 	auto found = std::find( vecImportFunctionInstances.begin(), vecImportFunctionInstances.end(), pInstance );
 	if( found != vecImportFunctionInstances.end() )
 	{
