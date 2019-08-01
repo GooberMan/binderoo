@@ -89,7 +89,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module binderoo.util.enumoptions;
 //----------------------------------------------------------------------------
 
-import binderoo.traits;
+import binderoo.traits : ModuleName;
 import binderoo.util.bitpacking;
 import std.traits : OriginalType;
 //----------------------------------------------------------------------------
