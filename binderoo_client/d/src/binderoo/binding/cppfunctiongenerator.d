@@ -186,11 +186,11 @@ struct CPPFunctionGenerator( alias Desc ) if( IsTemplatedType!Desc )
 				{
 					static if( Desc.ReturnsRef )
 					{
-						appendToBoth( FullTypeName!( Desc.ReturnType ) ~ "* retval = &" );
+						appendToBoth( "auto retval = &" );
 					}
 					else
 					{
-						appendToBoth( FullTypeName!( Desc.ReturnType ) ~ " retval = " );
+						appendToBoth( "auto retval = " );
 					}
 				}
 			}
