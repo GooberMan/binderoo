@@ -53,24 +53,30 @@ namespace binderoo
 	};
 	//------------------------------------------------------------------------
 
+	constexpr int32_t LockedVal = 1;
+	constexpr int32_t UnlockedVal = 0;
 	struct ScopeLock
 	{
 		BIND_INLINE ScopeLock( std::atomic< int32_t >& val )
 			: toLock( val )
 		{
-			lock( 1, 0 );
+			lock( LockedVal, UnlockedVal );
 		}
 
 		BIND_INLINE ~ScopeLock()
 		{
-			lock( 0, 1 );
-			_mm_mfence();
+			lock( UnlockedVal, LockedVal );
 		}
 
 	private:
-		BIND_INLINE void lock( int32_t bLock, int32_t bExpected )
+		BIND_INLINE void lock( int32_t toSet, int32_t expected )
 		{
-			while( !toLock.compare_exchange_strong( bExpected, bLock ) ) { }
+			int32_t expectedCopy;
+			do
+			{
+				expectedCopy = expected;
+			}
+			while( !toLock.compare_exchange_strong( expectedCopy, toSet, std::memory_order_seq_cst ) );
 		}
 		//--------------------------------------------------------------------
 

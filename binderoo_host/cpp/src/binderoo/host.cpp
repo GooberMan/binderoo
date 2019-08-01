@@ -478,10 +478,16 @@ binderoo::HostImplementation::HostImplementation( HostConfiguration& config )
 	, reloadEvent( "binderoo_service_reload" )
 	, bInRapidIterationMode( config.bStartInRapidIterationMode )
 	, bReloadLibs( false )
+	, lockImportFunctionInstances( 0 )
+	, lockImportClassInstances( 0 )
 {
 	// HACK: Reserving so that we don't have to do a resize...
-	vecBoundFunctions.reserve( 8192 );
-	vecBoundObjects.reserve( 65536 );
+	vecBoundFunctions.reserve( 4096 );
+	vecBoundObjects.reserve( 1024 );
+
+	vecImportFunctionInstances.reserve( 8192 );
+	vecImportClassInstances.reserve( 65536 );
+
 	collectExports();
 
 	performLoad();
@@ -1134,6 +1140,8 @@ void binderoo::HostImplementation::deregisterImportedClassInstance( binderoo::Im
 
 void binderoo::HostImplementation::registerImportedFunction( binderoo::ImportedBase* pInstance )
 {
+	binderoo::ScopeLock lock( lockImportFunctionInstances );
+
 	const HostBoundFunction* pFunction = getImportedFunctionDetails( pInstance->pSymbol, pInstance->pSymbolIdent );
 
 	if( pFunction )
@@ -1142,7 +1150,6 @@ void binderoo::HostImplementation::registerImportedFunction( binderoo::ImportedB
 		pInstance->pObjectDescriptor	= (void*)pFunction;
 	}
 
-	binderoo::ScopeLock lock( lockImportFunctionInstances );
 	vecImportFunctionInstances.push_back( pInstance );
 }
 //----------------------------------------------------------------------------
