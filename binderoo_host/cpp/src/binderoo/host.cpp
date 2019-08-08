@@ -331,7 +331,11 @@ namespace binderoo
 		void						logWarning( const char* pMessage );
 		void						logError( const char* pMessage );
 
+		void						setupTempPath();
+
 		HostConfiguration&			configuration;
+
+		InternalString				strSystemTempPath;
 
 		SharedEvent					reloadEvent;
 
@@ -487,6 +491,8 @@ binderoo::HostImplementation::HostImplementation( HostConfiguration& config )
 
 	vecImportFunctionInstances.reserve( 8192 );
 	vecImportClassInstances.reserve( 65536 );
+
+	setupTempPath();
 
 	collectExports();
 
@@ -913,22 +919,29 @@ void binderoo::HostImplementation::collectBoundObjects()
 }
 //----------------------------------------------------------------------------
 
+void binderoo::HostImplementation::setupTempPath()
+{
+#if BINDEROOHOST_RAPIDITERATION
+	DWORD dTempPathLength = GetTempPath( 0, nullptr );
+	strSystemTempPath.resize( dTempPathLength - 1 );
+	GetTempPath( dTempPathLength, (char*)strSystemTempPath.data() );
+	std::replace( strSystemTempPath.begin(), strSystemTempPath.end(), '\\', '/' );
+	strSystemTempPath += "binderoo/";
+
+	DWORD dPathAttributes = GetFileAttributes( strSystemTempPath.c_str() );
+	if( dPathAttributes == INVALID_FILE_ATTRIBUTES || ( dPathAttributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 )
+	{
+		CreateDirectory( strSystemTempPath.c_str(), nullptr );
+	}
+	else
+	{
+	}
+#endif // BINDEROOHOST_RAPIDITERATION
+}
+
 bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib& lib )
 {
 #if BINDEROOHOST_RAPIDITERATION
-	InternalString strTempPath;
-	DWORD dTempPathLength = GetTempPath( 0, nullptr );
-	strTempPath.resize( dTempPathLength - 1 );
-	GetTempPath( dTempPathLength, (char*)strTempPath.data() );
-	std::replace( strTempPath.begin(), strTempPath.end(), '\\', '/' );
-	strTempPath += "binderoo/";
-
-	DWORD dPathAttributes = GetFileAttributes( strTempPath.c_str() );
-	if( dPathAttributes == INVALID_FILE_ATTRIBUTES || ( dPathAttributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 )
-	{
-		CreateDirectory( strTempPath.c_str(), nullptr );
-	}
-
 	UUID newUUID;
 	RPC_STATUS uResult = UuidCreate( &newUUID );
 	InternalString strUUID;
@@ -943,8 +956,8 @@ bool binderoo::HostImplementation::loadDynamicLibrary( binderoo::HostDynamicLib&
 		++pCurr;
 	}
 
-	strTempPath += strUUID + "/";
-	dPathAttributes = GetFileAttributes( strTempPath.c_str() );
+	InternalString strTempPath = strSystemTempPath + strUUID + "/";
+	DWORD dPathAttributes = GetFileAttributes( strTempPath.c_str() );
 	if( dPathAttributes == INVALID_FILE_ATTRIBUTES || ( dPathAttributes & FILE_ATTRIBUTE_DIRECTORY ) == 0 )
 	{
 		CreateDirectory( strTempPath.c_str(), nullptr );
