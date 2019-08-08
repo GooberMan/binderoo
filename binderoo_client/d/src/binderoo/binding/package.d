@@ -1455,10 +1455,10 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		}
 		lines ~= strObjTabs ~ "public delegate " ~ strReturnType ~ " " ~ strDelegateType ~ strParameters ~ ";";
 		lines ~= strObjTabs ~ "public static " ~ strDelegateType ~ " " ~ strPropertyName;
-		lines ~= strObjTabs ~ "{ get {";
+		lines ~= strObjTabs ~ "{ get { lock( ThreadingLock ) {";
 		lines ~= strContentTabs ~ "if( " ~ strImportedFuncVarName ~ " == null ) " ~ strImportedFuncVarName ~ " = new ImportedFunction( \"" ~ cast(string)func.strFunctionName ~ "\", \"" ~ cast(string)func.strFunctionSignature ~ "\" );";
 		lines ~= strContentTabs ~ "return (" ~ strDelegateType ~ ")Marshal.GetDelegateForFunctionPointer( " ~ strImportedFuncVarName ~ ".FuncPtr, typeof( " ~ strDelegateType ~ " ) );";
-		lines ~= strObjTabs ~ "} }";
+		lines ~= strObjTabs ~ "} } }";
 
 		return lines;
 	}
@@ -1896,6 +1896,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		lines ~= "{";
 		lines ~= "\tpublic static class FP";
 		lines ~= "\t{";
+		lines ~= "\t\tprivate static System.Object ThreadingLock = new System.Object();";
 		lines ~= handleObject( root );
 		lines ~= "\t}";
 		lines ~= "}";
