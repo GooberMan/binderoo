@@ -116,7 +116,8 @@ binderoo_imported_function_t binderoo_host_create_imported_function( const char*
 		return found->second->m_pFunc;
 	}
 
-	Host_Function_C* pFunc = new Host_Function_C { strName, strSignature, strLookupName, nullptr, 1 };
+	Host_Function_C* pFunc = new Host_Function_C { strName, strSignature, strLookupName, nullptr };
+	pFunc->m_uRefCount = 1;
 	pFunc->m_pFunc = new binderoo::ImportedFunction< void >( pFunc->m_strName.c_str(), pFunc->m_strSignature.c_str() );
 	s_functions[ strLookupName ] = pFunc;
 	return pFunc;
@@ -149,7 +150,8 @@ binderoo_func_ptr_t binderoo_host_get_function_ptr( binderoo_imported_function_t
 
 binderoo_imported_class_t binderoo_host_create_imported_class( const char* pName )
 {
-	Host_Class_C* pNewClass = new Host_Class_C { pName, binderoo::RefCountedImportedClassInstance< void >(), false, 1 };
+	Host_Class_C* pNewClass = new Host_Class_C { pName, binderoo::RefCountedImportedClassInstance< void >(), false };
+	pNewClass->m_iOwnRefCount = 1;
 
 	InternalString strName( pName );
 
@@ -171,7 +173,8 @@ binderoo_imported_class_t binderoo_host_register_imported_class( void* pObj, con
 	auto found = s_rawObjects.find( pObj );
 	if( found == s_rawObjects.end() )
 	{
-		Host_Class_C* pNewClass = new Host_Class_C { pClassName, binderoo::RefCountedImportedClassInstance< void >(), true, 1 };
+		Host_Class_C* pNewClass = new Host_Class_C { pClassName, binderoo::RefCountedImportedClassInstance< void >(), true };
+		pNewClass->m_iOwnRefCount = 1;
 		pNewClass->m_pObj.registerRawInstance( pObj, pNewClass->m_strName.c_str() );
 
 		s_rawObjects.insert( RawObjectMap::value_type( pObj, pNewClass ) );
@@ -206,12 +209,8 @@ void binderoo_host_release_imported_class( binderoo_imported_class_t pClass )
 
 	Host_Class_C* cClass = (Host_Class_C*)pClass;
 
-	if( cClass->m_iOwnRefCount.load() <= 0 )
-	{
-		int foo = 0;
-	}
-
 	cClass->m_iOwnRefCount--;
+
 	void* pObjPtr = ((Host_Class_C*)pClass)->m_pObj.get();
 
 	if( ((Host_Class_C*)pClass)->m_pObj.releaseInstance() == 0 )

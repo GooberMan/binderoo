@@ -346,6 +346,9 @@ enum IsBasicType( T )	= is( T == byte )
 						|| is( T == dchar );
 //----------------------------------------------------------------------------
 
+enum IsBasicType( T : AT[], AT ) = IsBasicType!( Unqualified!AT );
+//----------------------------------------------------------------------------
+
 template BaseType( Type ) if( is( Type == class ) )
 {
 	static if( is( Type Bases == super ) )
@@ -912,6 +915,9 @@ template IndexOf( alias Symbol, Args... ) if( Args.length > 0 )
 
 	enum IndexOf = impl();
 }
+//----------------------------------------------------------------------------
+
+enum IsSame( alias LHS, alias RHS ) = __traits( isSame, LHS, RHS );
 //----------------------------------------------------------------------------
 
 // TestTemplate must be instantiable, take one parameter, and alias to a boolean enum.

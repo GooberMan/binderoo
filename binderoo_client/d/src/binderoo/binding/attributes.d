@@ -461,7 +461,7 @@ template BindingData( Type ) // TODO: UPGRADE DMD AND KILL THIS THING
 				}
 				else
 				{
-					pragma( msg, "Weird type " ~ Name );
+					//pragma( msg, "Weird type " ~ Name );
 					enum Name = FullTypeName!Type;
 					enum Parent = "";
 				}

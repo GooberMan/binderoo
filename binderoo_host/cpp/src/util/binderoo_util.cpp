@@ -149,7 +149,8 @@ enum Options : int
 
 void printUsageScreen()
 {
-	printf( "Binderoo Util (C) 2016-2018 Remedy Entertainment Ltd.\n" );
+	printf( "Binderoo Util (C) 2016-2017 Remedy Entertainment Ltd.\n" );
+	printf( "              (C) 2018-2019 Ethan Watson\n" );
 	printf( "\n" );
 	printf( "Usage: binderoo_util [option] [...]\n" );
 	printf( "\n" );
