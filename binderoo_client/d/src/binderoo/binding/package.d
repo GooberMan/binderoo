@@ -1478,7 +1478,7 @@ public string generateCSharpStyleImportDeclarationsForAllObjects( string strVers
 		}
 		else if( func.eFunctionKind & BoundFunction.FunctionKind.ReturnsClass )
 		{
-			return "return new " ~ strReturnType ~ "( binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ) );";
+			return "IntPtr ret = binderoointernal.FP." ~ strPropertyName ~ "( " ~ strParameterNames.joinWith( ", " ) ~ " ); if( ret != IntPtr.Zero ) return new " ~ strReturnType ~ "( ret ); return null;";
 		}
 		else if( strReturnType.endsWith( "[]" ) )
 		{
